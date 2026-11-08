@@ -1,0 +1,4 @@
+Terrain of the companion's map (companion/map.js): 64x64 pixel-art squares, one set per cover value
+(c0 open ground, c1 light, c2 medium, c3 heavy cover, hill), drawn for this project with PixelLab
+(pixellab.ai, create_tiles_pro, 2026-11-08) from text prompts only: generic countryside, no reference to
+the game's tiles. Free to use with this project.

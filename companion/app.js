@@ -48,6 +48,7 @@ function setupScreen() {
     let side = p.side ?? 0;
     let botDice = p.botDice ?? 'virtual';
     let controlRule = p.controlRule ?? 'normandy';
+    let terrain = p.terrain !== false;
     const info = h('div', { class: 'scen-info' });
     const showInfo = () => {
         const sc = SCENARIOS.find((x) => x.id === scenario);
@@ -65,7 +66,7 @@ function setupScreen() {
                 h('p', { class: 'small' }, t('cmp.setup.deck', { cards: cardList(cards.deck) })),
                 h('p', { class: 'small' }, t('cmp.setup.supply', { cards: cardList(cards.supply) })),
                 h('p', { class: 'small muted' }, t('cmp.setup.botCards', { side: sideName(1 - side) }))),
-            h('div', { class: 'scen-map' }, drawMap(preview, { viewer: side })));
+            h('div', { class: 'scen-map' }, drawMap(preview, { viewer: side, terrain })));
     };
     const select = h('select', { onchange: (e) => { scenario = Number(e.target.value); showInfo(); } },
         SCENARIOS.map((sc) => h('option', { value: sc.id, selected: sc.id === scenario }, `${sc.id}. ${tr(sc.title)}`)));
@@ -73,6 +74,8 @@ function setupScreen() {
         [0, 1].map((s) => h('option', { value: s, selected: s === side }, sideName(s))));
     const dice = h('select', { onchange: (e) => (botDice = e.target.value) },
         ['virtual', 'physical'].map((v) => h('option', { value: v, selected: v === botDice }, t(`cmp.setup.botDice.${v}`))));
+    const mapSel = h('select', { onchange: (e) => { terrain = e.target.value === 'terrain'; savePrefs({ terrain }); showInfo(); } },
+        ['terrain', 'diagram'].map((v) => h('option', { value: v, selected: (v === 'terrain') === terrain }, t(`cmp.setup.map.${v}`))));
     const ruleHelp = h('span', { class: 'small muted' });
     const showRule = () => (ruleHelp.textContent = t(`setup.controlRule.${controlRule}.help`));
     const rule = h('select', { onchange: (e) => { controlRule = e.target.value; showRule(); } },
@@ -92,6 +95,7 @@ function setupScreen() {
                 h('label', {}, t('cmp.setup.side'), sideSel),
                 h('label', {}, t('cmp.setup.botDice'), dice),
                 h('label', {}, t('setup.controlRule'), rule, ruleHelp),
+                h('label', {}, t('cmp.setup.map'), mapSel),
                 h('button', { class: 'primary', onclick: () => {
                     savePrefs({ scenario, side, botDice, controlRule });
                     start({ setup: { scenario, seed: Math.random().toString(36).slice(2, 10), controlRule, external: side, botDice } });

@@ -155,7 +155,7 @@ export class CompanionView {
             if (req.kind === 'roll' || req.kind === 'casualty') focus = { unit: req.target ?? req.unit };
             if (req.kind === 'move') focus = { unit: req.unit };
         }
-        this.mapEl.replaceChildren(drawMap(step?.board ?? view, { picks, onPick: (id) => this.pick(id), viewer: this.me, focus, arrow }));
+        this.mapEl.replaceChildren(drawMap(step?.board ?? view, { picks, onPick: (id) => this.pick(id), viewer: this.me, focus, arrow, terrain: pref('terrain') !== false }));
         const main = step ? this.stepCard(step) : this.busy ? h('div', { class: 'card-box thinking' }, t('cmp.thinking'))
             : this.session.over ? this.endCard() : req ? this.askCard(req, view) : null;
         this.panel.replaceChildren(main ?? '', deckPanel(view, this.me), this.botPanel(view), this.logPanel(view));

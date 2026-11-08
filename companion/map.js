@@ -25,6 +25,18 @@ export function layout(sc) {
 
 /** Cover as the class of a tile's colour: open ground to heavy cover, and hills. */
 const coverClass = (c) => (c === 'hill' ? 'hill' : `c${c}`);
+
+/** Pixel-art squares per cover (assets/terrain, our own); a tile always gets the same one. */
+const TERRAIN = { c0: 4, c1: 3, c2: 3, c3: 4, hill: 2 };
+function terrainOf(tileId, cover) {
+    const cls = coverClass(cover);
+    let h = 0;
+    for (const ch of tileId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    return `assets/terrain/${cls}-${(h % TERRAIN[cls]) + 1}.png`;
+}
+let clipIds = 0;
+// loaded once at the start, so the first map does not show up empty
+if (typeof Image !== 'undefined') for (const [cls, n] of Object.entries(TERRAIN)) for (let i = 1; i <= n; i++) new Image().src = `assets/terrain/${cls}-${i}.png`;
 export const coverText = (c) => (c === 'hill' ? '3/1' : String(c));
 
 /** Short label of a counter: "FUS A", "MORT". */
@@ -38,12 +50,14 @@ export function shortName(uid) {
  * @param {any} view
  * @param {{ picks?: Map<string, string>, onPick?: (id: string) => void, viewer: number,
  *   focus?: { unit?: string, tile?: string, tiles?: string[] }, arrow?: { from: string, to: string, kind: 'move' | 'attack', side: string } }} o
- *   picks: `tile:12B` / `unit:de:RA` -> the option id they answer
+ *   picks: `tile:12B` / `unit:de:RA` -> the option id they answer; terrain: pixel art on the tiles (else colours only)
  */
-export function drawMap(view, { picks = new Map(), onPick = () => {}, viewer, focus = {}, arrow = null }) {
+export function drawMap(view, { picks = new Map(), onPick = () => {}, viewer, focus = {}, arrow = null, terrain = true }) {
     const sc = scenarioById(view.scenario);
     const { W, H, pos } = layout(sc);
-    const svg = s('svg', { viewBox: `-4 -4 ${W + 8} ${H + 8}`, class: 'cmap', role: 'img' });
+    const svg = s('svg', { viewBox: `-4 -4 ${W + 8} ${H + 8}`, class: `cmap${terrain ? ' terrain' : ''}`, role: 'img' });
+    const clip = `ctclip${++clipIds}`;
+    if (terrain) svg.append(s('defs', {}, s('clipPath', { id: clip }, s('rect', { x: 1.5, y: 1.5, width: T - 3, height: T - 3, rx: 6 }))));
     const spawnsAt = {};
     for (const side of SIDES) for (const sp of sc.spawns[side]) (spawnsAt[sp.tile] ??= []).push({ side, who: sp.who });
     const focusTiles = new Set([focus.tile, ...(focus.tiles ?? [])].filter(Boolean));
@@ -54,8 +68,9 @@ export function drawMap(view, { picks = new Map(), onPick = () => {}, viewer, fo
         const pick = picks.get(`tile:${tile.id}`);
         const g = s('g', { transform: `translate(${x} ${y})`, class: `ctile ${coverClass(cover)}${pick ? ' pickable' : ''}${focusTiles.has(tile.id) ? ' focus' : ''}`,
             'data-pick': pick, onclick: pick ? () => onPick(pick) : null });
+        if (terrain) g.append(s('image', { href: terrainOf(tile.id, cover), x: 1.5, y: 1.5, width: T - 3, height: T - 3, preserveAspectRatio: 'none', 'clip-path': `url(#${clip})`, class: 'tart' }));
         g.append(s('rect', { x: 1.5, y: 1.5, width: T - 3, height: T - 3, rx: 6, class: 'ground' }));
-        if (cover === 'hill') g.append(s('path', { d: `M14 ${T - 30} Q${T / 2} ${T - 70} ${T - 14} ${T - 30} M28 ${T - 30} Q${T / 2} ${T - 56} ${T - 28} ${T - 30}`, class: 'contour' }));
+        if (cover === 'hill' && !terrain) g.append(s('path', { d: `M14 ${T - 30} Q${T / 2} ${T - 70} ${T - 14} ${T - 30} M28 ${T - 30} Q${T / 2} ${T - 56} ${T - 28} ${T - 30}`, class: 'contour' }));
         g.append(s('text', { x: 8, y: T - 9, class: 'tid' }, tile.id));
         // the cover in a small shield
         g.append(s('path', { d: `M${T - 31} ${T - 25} h20 v8 q0 9 -10 13 q-10 -4 -10 -13 z`, class: 'tshield' }));

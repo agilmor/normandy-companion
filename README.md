@@ -25,7 +25,7 @@ Undaunted: Normandy is a game by David Thompson and Trevor Benjamin, published b
 official and not endorsed by them. It includes none of the game's art, rulebook or scenario texts: you need the game.
 
 3D dice: three.js and cannon-es (MIT, `vendor/`). Sounds: CC0 recordings and Kenney's Casino Audio (CC0,
-`assets/sounds/`).
+`assets/sounds/`). Map terrain: our own pixel art, made with PixelLab (`assets/terrain/`).
 
 ## Tests
 

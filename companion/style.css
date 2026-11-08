@@ -114,6 +114,10 @@ input, select, textarea { background: #14160f; color: var(--ink); border: 1px so
 .ctile.pickable .ground { stroke: var(--accent); stroke-width: 6; }
 .ctile.pickable:hover .ground { filter: brightness(1.12); }
 .ctile.focus .ground { stroke: #fff; stroke-width: 5; stroke-dasharray: 10 6; }
+.cmap.terrain .ctile .ground { fill: none; }
+.cmap.terrain .ctile .tart { image-rendering: pixelated; }
+.cmap.terrain .ctile.pickable:hover .tart { filter: brightness(1.15); }
+.cmap.terrain .ctile .tid { fill: var(--tile-ink); stroke: #f1ecda; stroke-width: 4; stroke-linejoin: round; paint-order: stroke; }
 .cmark circle { stroke-width: 2.5; }
 .cmark text { font-size: 12px; text-anchor: middle; fill: #fff; font-weight: 700; }
 .cmark.us circle { stroke: var(--us); }
