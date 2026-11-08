@@ -19,6 +19,17 @@ export function diceTray() {
     }));
 }
 
+/**
+ * Downloads the 3D dice code (three.js and cannon-es, 1.1 MB) in the background once the start screen is up, so the
+ * first roll does not wait for it when the app is served from the web. Only the module: the tray (and its WebGL
+ * context) is still made at the first roll, or when a game starts.
+ */
+export function warmDice() {
+    const go = () => import('./dice3d.js').catch(() => {});
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(go, { timeout: 3000 });
+    else setTimeout(go, 1000);
+}
+
 /** The pauses of a playback: each one ends after its time, or at once after a tap. */
 export class Playback {
     constructor() {

@@ -11,6 +11,7 @@ import { decodeRecord, replayRecord } from '../src/engine/session.js';
 import { cardName, sideName } from '../src/ui/text.js';
 import { drawMap } from './map.js';
 import { CompanionView, loadSaved } from './play.js';
+import { warmDice } from '../src/ui/combat.js';
 
 const root = document.getElementById('app');
 const PREFS = 'unc-prefs';
@@ -140,4 +141,5 @@ window.addEventListener('popstate', () => {
 
 if (history.state) history.replaceState(null, '');
 setupScreen();
+if (prefs().dice3d !== false) warmDice();
 
