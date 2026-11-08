@@ -1,0 +1,488 @@
+{
+ "types": {
+  "PS": {
+   "id": "PS",
+   "kind": "PS",
+   "name": {
+    "en": "Platoon Sergeant",
+    "es": "Sargento de pelotón"
+   },
+   "initiative": 9,
+   "squad": null,
+   "unit": null,
+   "command": true,
+   "fog": false,
+   "copies": 1,
+   "actions": [
+    {
+     "a": "bolster",
+     "v": 3
+    },
+    {
+     "a": "command",
+     "v": 2
+    }
+   ]
+  },
+  "PG": {
+   "id": "PG",
+   "kind": "PG",
+   "name": {
+    "en": "Platoon Guide",
+    "es": "Guía de pelotón"
+   },
+   "initiative": 8,
+   "squad": null,
+   "unit": null,
+   "command": true,
+   "fog": false,
+   "copies": 1,
+   "actions": [
+    {
+     "a": "bolster",
+     "v": 1
+    },
+    {
+     "a": "guide",
+     "v": 1
+    }
+   ]
+  },
+  "SLA": {
+   "id": "SLA",
+   "kind": "SL",
+   "name": {
+    "en": "Squad Leader",
+    "es": "Líder de escuadra"
+   },
+   "initiative": 7,
+   "squad": "A",
+   "unit": null,
+   "command": true,
+   "fog": false,
+   "copies": 1,
+   "actions": [
+    {
+     "a": "bolster",
+     "v": 2,
+     "squad": "A"
+    },
+    {
+     "a": "inspire",
+     "v": 1,
+     "squad": "A"
+    }
+   ]
+  },
+  "SLB": {
+   "id": "SLB",
+   "kind": "SL",
+   "name": {
+    "en": "Squad Leader",
+    "es": "Líder de escuadra"
+   },
+   "initiative": 7,
+   "squad": "B",
+   "unit": null,
+   "command": true,
+   "fog": false,
+   "copies": 1,
+   "actions": [
+    {
+     "a": "bolster",
+     "v": 2,
+     "squad": "B"
+    },
+    {
+     "a": "inspire",
+     "v": 1,
+     "squad": "B"
+    }
+   ]
+  },
+  "SLC": {
+   "id": "SLC",
+   "kind": "SL",
+   "name": {
+    "en": "Squad Leader",
+    "es": "Líder de escuadra"
+   },
+   "initiative": 7,
+   "squad": "C",
+   "unit": null,
+   "command": true,
+   "fog": false,
+   "copies": 1,
+   "actions": [
+    {
+     "a": "bolster",
+     "v": 2,
+     "squad": "C"
+    },
+    {
+     "a": "inspire",
+     "v": 1,
+     "squad": "C"
+    }
+   ]
+  },
+  "RA": {
+   "id": "RA",
+   "kind": "R",
+   "name": {
+    "en": "Rifleman",
+    "es": "Fusilero"
+   },
+   "initiative": 5,
+   "squad": "A",
+   "unit": "RA",
+   "command": false,
+   "fog": false,
+   "copies": 5,
+   "actions": [
+    {
+     "a": "move",
+     "v": 1
+    },
+    {
+     "a": "attack",
+     "v": 1
+    },
+    {
+     "a": "control"
+    }
+   ]
+  },
+  "RB": {
+   "id": "RB",
+   "kind": "R",
+   "name": {
+    "en": "Rifleman",
+    "es": "Fusilero"
+   },
+   "initiative": 5,
+   "squad": "B",
+   "unit": "RB",
+   "command": false,
+   "fog": false,
+   "copies": 5,
+   "actions": [
+    {
+     "a": "move",
+     "v": 1
+    },
+    {
+     "a": "attack",
+     "v": 1
+    },
+    {
+     "a": "control"
+    }
+   ]
+  },
+  "RC": {
+   "id": "RC",
+   "kind": "R",
+   "name": {
+    "en": "Rifleman",
+    "es": "Fusilero"
+   },
+   "initiative": 5,
+   "squad": "C",
+   "unit": "RC",
+   "command": false,
+   "fog": false,
+   "copies": 5,
+   "actions": [
+    {
+     "a": "move",
+     "v": 1
+    },
+    {
+     "a": "attack",
+     "v": 1
+    },
+    {
+     "a": "control"
+    }
+   ]
+  },
+  "SA": {
+   "id": "SA",
+   "kind": "S",
+   "name": {
+    "en": "Scout",
+    "es": "Explorador"
+   },
+   "initiative": 6,
+   "squad": "A",
+   "unit": "SA",
+   "command": false,
+   "fog": false,
+   "copies": 3,
+   "actions": [
+    {
+     "a": "scout",
+     "v": 2
+    },
+    {
+     "a": "attack",
+     "v": 1
+    },
+    {
+     "a": "recon"
+    },
+    {
+     "a": "conceal"
+    }
+   ]
+  },
+  "SB": {
+   "id": "SB",
+   "kind": "S",
+   "name": {
+    "en": "Scout",
+    "es": "Explorador"
+   },
+   "initiative": 6,
+   "squad": "B",
+   "unit": "SB",
+   "command": false,
+   "fog": false,
+   "copies": 3,
+   "actions": [
+    {
+     "a": "scout",
+     "v": 2
+    },
+    {
+     "a": "attack",
+     "v": 1
+    },
+    {
+     "a": "recon"
+    },
+    {
+     "a": "conceal"
+    }
+   ]
+  },
+  "SC": {
+   "id": "SC",
+   "kind": "S",
+   "name": {
+    "en": "Scout",
+    "es": "Explorador"
+   },
+   "initiative": 6,
+   "squad": "C",
+   "unit": "SC",
+   "command": false,
+   "fog": false,
+   "copies": 3,
+   "actions": [
+    {
+     "a": "scout",
+     "v": 2
+    },
+    {
+     "a": "attack",
+     "v": 1
+    },
+    {
+     "a": "recon"
+    },
+    {
+     "a": "conceal"
+    }
+   ]
+  },
+  "MA": {
+   "id": "MA",
+   "kind": "M",
+   "name": {
+    "en": "Machine Gunner",
+    "es": "Ametrallador"
+   },
+   "initiative": 3,
+   "squad": "A",
+   "unit": "MA",
+   "command": false,
+   "fog": false,
+   "copies": 3,
+   "actions": [
+    {
+     "a": "move",
+     "v": 1
+    },
+    {
+     "a": "attack",
+     "v": 2
+    },
+    {
+     "a": "suppress",
+     "v": 4
+    }
+   ]
+  },
+  "MB": {
+   "id": "MB",
+   "kind": "M",
+   "name": {
+    "en": "Machine Gunner",
+    "es": "Ametrallador"
+   },
+   "initiative": 3,
+   "squad": "B",
+   "unit": "MB",
+   "command": false,
+   "fog": false,
+   "copies": 3,
+   "actions": [
+    {
+     "a": "move",
+     "v": 1
+    },
+    {
+     "a": "attack",
+     "v": 2
+    },
+    {
+     "a": "suppress",
+     "v": 4
+    }
+   ]
+  },
+  "MC": {
+   "id": "MC",
+   "kind": "M",
+   "name": {
+    "en": "Machine Gunner",
+    "es": "Ametrallador"
+   },
+   "initiative": 3,
+   "squad": "C",
+   "unit": "MC",
+   "command": false,
+   "fog": false,
+   "copies": 3,
+   "actions": [
+    {
+     "a": "move",
+     "v": 1
+    },
+    {
+     "a": "attack",
+     "v": 2
+    },
+    {
+     "a": "suppress",
+     "v": 4
+    }
+   ]
+  },
+  "MO": {
+   "id": "MO",
+   "kind": "MO",
+   "name": {
+    "en": "Mortar",
+    "es": "Mortero"
+   },
+   "initiative": 2,
+   "squad": null,
+   "unit": "MO",
+   "command": false,
+   "fog": false,
+   "copies": 3,
+   "actions": [
+    {
+     "a": "move",
+     "v": 1
+    },
+    {
+     "a": "blast",
+     "v": 1
+    },
+    {
+     "a": "target"
+    }
+   ]
+  },
+  "SN": {
+   "id": "SN",
+   "kind": "SN",
+   "name": {
+    "en": "Sniper",
+    "es": "Francotirador"
+   },
+   "initiative": 4,
+   "squad": null,
+   "unit": "SN",
+   "command": false,
+   "fog": false,
+   "copies": 3,
+   "actions": [
+    {
+     "a": "stalk",
+     "v": 1
+    },
+    {
+     "a": "attack",
+     "v": 3
+    }
+   ]
+  },
+  "FOW": {
+   "id": "FOW",
+   "kind": "FOW",
+   "name": {
+    "en": "Fog of War",
+    "es": "Niebla de guerra"
+   },
+   "initiative": 1,
+   "squad": null,
+   "unit": null,
+   "command": false,
+   "fog": true,
+   "copies": 10,
+   "actions": []
+  }
+ },
+ "units": {
+  "R": {
+   "name": {
+    "en": "Riflemen",
+    "es": "Fusileros"
+   },
+   "defence": 4
+  },
+  "S": {
+   "name": {
+    "en": "Scouts",
+    "es": "Exploradores"
+   },
+   "defence": 5
+  },
+  "M": {
+   "name": {
+    "en": "Gunners",
+    "es": "Ametralladores"
+   },
+   "defence": 4
+  },
+  "MO": {
+   "name": {
+    "en": "Mortar",
+    "es": "Mortero"
+   },
+   "defence": 4
+  },
+  "SN": {
+   "name": {
+    "en": "Snipers",
+    "es": "Francotiradores"
+   },
+   "defence": 6
+  }
+ }
+}

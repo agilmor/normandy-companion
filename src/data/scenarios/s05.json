@@ -1,0 +1,226 @@
+{
+ "id": 5,
+ "initiative": "us",
+ "tiles": [
+  {
+   "id": "1A",
+   "x": 4,
+   "y": 0
+  },
+  {
+   "id": "5A",
+   "x": 3,
+   "y": 2
+  },
+  {
+   "id": "3A",
+   "x": 5,
+   "y": 2
+  },
+  {
+   "id": "10B",
+   "x": 2,
+   "y": 4
+  },
+  {
+   "id": "9B",
+   "x": 4,
+   "y": 4
+  },
+  {
+   "id": "12B",
+   "x": 6,
+   "y": 4
+  },
+  {
+   "id": "14A",
+   "x": 1,
+   "y": 6
+  },
+  {
+   "id": "18A",
+   "x": 3,
+   "y": 6
+  },
+  {
+   "id": "15A",
+   "x": 5,
+   "y": 6
+  },
+  {
+   "id": "17A",
+   "x": 7,
+   "y": 6
+  },
+  {
+   "id": "7A",
+   "x": 2,
+   "y": 8
+  },
+  {
+   "id": "8B",
+   "x": 4,
+   "y": 8
+  },
+  {
+   "id": "16B",
+   "x": 6,
+   "y": 8
+  },
+  {
+   "id": "4A",
+   "x": 3,
+   "y": 10
+  },
+  {
+   "id": "6A",
+   "x": 5,
+   "y": 10
+  },
+  {
+   "id": "2B",
+   "x": 4,
+   "y": 12
+  }
+ ],
+ "objectives": {
+  "18A": 1,
+  "17A": 1
+ },
+ "control": {
+  "1A": {
+   "us": "scouted"
+  },
+  "5A": {
+   "us": "scouted"
+  },
+  "3A": {
+   "us": "scouted"
+  },
+  "18A": {
+   "de": "scouted"
+  },
+  "17A": {
+   "de": "scouted"
+  },
+  "7A": {
+   "de": "scouted"
+  },
+  "8B": {
+   "de": "scouted"
+  },
+  "16B": {
+   "de": "scouted"
+  },
+  "4A": {
+   "de": "scouted"
+  },
+  "6A": {
+   "de": "scouted"
+  },
+  "2B": {
+   "de": "scouted"
+  }
+ },
+ "spawns": {
+  "us": [
+   {
+    "tile": "1A",
+    "who": [
+     "B",
+     "sniper"
+    ]
+   },
+   {
+    "tile": "5A",
+    "who": [
+     "A"
+    ]
+   }
+  ],
+  "de": [
+   {
+    "tile": "2B",
+    "who": [
+     "all"
+    ]
+   }
+  ]
+ },
+ "units": {
+  "us": {
+   "SB": "1A",
+   "RB": "1A",
+   "RA": "5A",
+   "SA": "5A"
+  },
+  "de": {
+   "RB": "2B",
+   "RA": "2B",
+   "MO": "2B"
+  }
+ },
+ "cards": {
+  "us": {
+   "deck": {
+    "PS": 1,
+    "PG": 1,
+    "SLA": 1,
+    "SLB": 1,
+    "RA": 1,
+    "RB": 1,
+    "SA": 1,
+    "SB": 1,
+    "FOW": 2
+   },
+   "supply": {
+    "RA": 4,
+    "RB": 4,
+    "SA": 2,
+    "SB": 2,
+    "MA": 3,
+    "MB": 3,
+    "SN": 3,
+    "FOW": 8
+   }
+  },
+  "de": {
+   "deck": {
+    "PS": 1,
+    "SLA": 1,
+    "SLB": 1,
+    "RA": 1,
+    "RB": 1,
+    "MO": 2,
+    "FOW": 3
+   },
+   "supply": {
+    "RA": 4,
+    "RB": 4,
+    "SA": 3,
+    "SB": 3,
+    "MA": 3,
+    "MB": 3,
+    "MO": 1,
+    "SN": 3,
+    "FOW": 7
+   }
+  }
+ },
+ "win": {
+  "us": {
+   "points": 2
+  },
+  "de": {
+   "pin": true
+  }
+ },
+ "bothPinned": false,
+ "title": {
+  "en": "Crossing the Vire",
+  "es": "Cruzando el río Vire"
+ },
+ "bot": {
+  "de": "heuristic"
+ }
+}

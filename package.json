@@ -1,0 +1,10 @@
+{
+  "name": "normandy-companion",
+  "private": true,
+  "type": "module",
+  "description": "Unofficial solo companion for the board game Undaunted: Normandy: plays the other side against you, with your physical copy",
+  "scripts": {
+    "test": "node --test \"tests/**/*.test.js\"",
+    "serve": "node serve.mjs"
+  }
+}

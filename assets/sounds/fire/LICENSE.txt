@@ -1,0 +1,9 @@
+The gunshots in this folder are cut (tools/build_sounds.py) from:
+
+The Free Firearm Sound Library (prepared version)
+Created and recorded by Ben Jaszczak, Brian Nelson, Kevin Heras and Matthew Nanney.
+https://opengameart.org/content/the-free-firearm-sound-library
+License: CC0 1.0 (public domain dedication), http://creativecommons.org/publicdomain/zero/1.0/
+
+us-rifle, us-sniper: M1917 Enfield. de-rifle, de-sniper: Mosin-Nagant and Arisaka.
+us-mg: Carl Gustav m/45. de-mg: PPSh-41.

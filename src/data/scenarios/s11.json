@@ -1,0 +1,259 @@
+{
+ "id": 11,
+ "initiative": "de",
+ "tiles": [
+  {
+   "id": "1B",
+   "x": 1,
+   "y": 2
+  },
+  {
+   "id": "6A",
+   "x": 3,
+   "y": 2
+  },
+  {
+   "id": "15B",
+   "x": 5,
+   "y": 2
+  },
+  {
+   "id": "12A",
+   "x": 2,
+   "y": 4
+  },
+  {
+   "id": "18B",
+   "x": 4,
+   "y": 4
+  },
+  {
+   "id": "2A",
+   "x": 6,
+   "y": 4
+  },
+  {
+   "id": "8A",
+   "x": 1,
+   "y": 6
+  },
+  {
+   "id": "3A",
+   "x": 3,
+   "y": 6
+  },
+  {
+   "id": "4A",
+   "x": 5,
+   "y": 6
+  },
+  {
+   "id": "9A",
+   "x": 7,
+   "y": 6
+  },
+  {
+   "id": "11A",
+   "x": 2,
+   "y": 8
+  },
+  {
+   "id": "17B",
+   "x": 4,
+   "y": 8
+  },
+  {
+   "id": "16A",
+   "x": 6,
+   "y": 8
+  },
+  {
+   "id": "14B",
+   "x": 1,
+   "y": 10
+  },
+  {
+   "id": "5A",
+   "x": 3,
+   "y": 10
+  },
+  {
+   "id": "7A",
+   "x": 5,
+   "y": 10
+  }
+ ],
+ "objectives": {
+  "2A": 1,
+  "9A": 1,
+  "16A": 1
+ },
+ "control": {
+  "1B": {
+   "de": "scouted"
+  },
+  "6A": {
+   "de": "scouted"
+  },
+  "15B": {
+   "us": "scouted"
+  },
+  "12A": {
+   "de": "scouted"
+  },
+  "2A": {
+   "us": "controlled"
+  },
+  "8A": {
+   "de": "scouted"
+  },
+  "4A": {
+   "us": "scouted"
+  },
+  "9A": {
+   "us": "controlled"
+  },
+  "11A": {
+   "de": "scouted"
+  },
+  "16A": {
+   "us": "controlled"
+  },
+  "14B": {
+   "de": "scouted"
+  },
+  "5A": {
+   "de": "scouted"
+  },
+  "7A": {
+   "us": "scouted"
+  }
+ },
+ "spawns": {
+  "us": [
+   {
+    "tile": "2A",
+    "who": [
+     "A"
+    ]
+   },
+   {
+    "tile": "9A",
+    "who": [
+     "B",
+     "sniper",
+     "mortar"
+    ]
+   },
+   {
+    "tile": "16A",
+    "who": [
+     "C"
+    ]
+   }
+  ],
+  "de": [
+   {
+    "tile": "1B",
+    "who": [
+     "A"
+    ]
+   },
+   {
+    "tile": "8A",
+    "who": [
+     "B",
+     "sniper",
+     "mortar"
+    ]
+   },
+   {
+    "tile": "14B",
+    "who": [
+     "C"
+    ]
+   }
+  ]
+ },
+ "units": {
+  "us": {
+   "RA": "2A",
+   "RB": "9A",
+   "RC": "16A"
+  },
+  "de": {
+   "RA": "1B",
+   "RB": "8A",
+   "RC": "14B"
+  }
+ },
+ "cards": {
+  "us": {
+   "deck": {
+    "PS": 1,
+    "SLA": 1,
+    "SLB": 1,
+    "SLC": 1,
+    "RA": 1,
+    "RB": 1,
+    "RC": 1,
+    "FOW": 2
+   },
+   "supply": {
+    "PG": 1,
+    "RA": 4,
+    "RB": 4,
+    "RC": 4,
+    "SA": 3,
+    "SB": 3,
+    "SC": 3,
+    "MA": 3,
+    "MB": 3,
+    "MC": 3,
+    "MO": 3,
+    "SN": 3,
+    "FOW": 8
+   }
+  },
+  "de": {
+   "deck": {
+    "PS": 1,
+    "SLA": 1,
+    "SLB": 1,
+    "SLC": 1,
+    "RA": 1,
+    "RB": 1,
+    "RC": 1,
+    "FOW": 2
+   },
+   "supply": {
+    "PG": 1,
+    "RA": 4,
+    "RB": 4,
+    "RC": 4,
+    "SA": 3,
+    "SB": 3,
+    "SC": 3,
+    "MA": 3,
+    "MB": 3,
+    "MC": 3,
+    "MO": 3,
+    "SN": 3,
+    "FOW": 8
+   }
+  }
+ },
+ "win": {
+  "us": {
+   "pin": true
+  },
+  "de": {
+   "points": 1
+  }
+ },
+ "bothPinned": false,
+ "title": {
+  "en": "Hill 314",
+  "es": "Colina 314"
+ }
+}
