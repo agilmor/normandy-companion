@@ -6,7 +6,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { GameEnd } from '../src/engine/ask.js';
 import { coverOf } from '../src/engine/data.js';
-import { casualty, checkWin, createState, normalizeSetup, points, pinned, hopeless } from '../src/engine/state.js';
+import { casualty, checkWin, createState, normalizeSetup, points, pinned, hopeless, withoutRoundLimit } from '../src/engine/state.js';
+import { heuristicBot } from '../src/ai/heuristicBot.js';
 import { Session, makeRecord, replayRecord } from '../src/engine/session.js';
 import { attackTargets, playOptions, playerTurn } from '../src/engine/turn.js';
 import { drive, fresh, setHand } from './helpers.js';
@@ -300,4 +301,21 @@ test('Command draws the top X cards (2994836)', () => {
     const asked = turn(g, US, ['act:PS:1', 'end']);
     assert.ok(!asked.some((r) => r.kind === 'command'));
     assert.equal(g.players[US].deck.length, before - 2);
+});
+
+test('[D-33] the round limit ends a game between bots; a game with someone playing has none, also one recorded with it', () => {
+    const upTo = (setup, answers, round) => {
+        const s = new Session(setup, answers);
+        const bots = [heuristicBot('a'), heuristicBot('b')];
+        while (!s.over && s.state.round < round) s.act(bots[s.pending.seat](s.pending, s.view(s.pending.seat)));
+        return s;
+    };
+    const setup = { scenario: 1, seed: 'limit', maxRounds: 1 };
+    const limited = upTo(setup, [], 3);
+    assert.ok(limited.over);
+    assert.deepEqual([limited.state.result.winner, limited.state.result.how], [null, 'limit']);
+    for (const s of [upTo(withoutRoundLimit(setup), [], 3), upTo(withoutRoundLimit(setup), limited.answers, 3)]) {
+        assert.ok(!s.over);
+        assert.equal(s.state.round, 3);
+    }
 });

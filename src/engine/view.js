@@ -33,6 +33,7 @@ export function view(g, seat) {
         seat,
         scenario: g.scenario,
         controlRule: g.setup.controlRule,
+        variant: g.setup.variant ?? null,
         external: g.setup.external ?? null,
         botDice: g.setup.botDice ?? null,
         round: g.round,

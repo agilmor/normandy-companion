@@ -3,14 +3,13 @@
 // times the value of the target is highest; Bolster brings in Riflemen first. It bids its least useful card.
 
 import { boardOf } from '../engine/board.js';
-import { TYPES, coverOf, defenceOf, scenarioById, typeId, unitType } from '../engine/data.js';
-import { seedFrom } from '../engine/rng.js';
+import { SIDES, TYPES, coverOf, defenceOf, hitChance, scenarioById, typeId, unitKind, unitType } from '../engine/data.js';
+import { nextRandom, seedFrom } from '../engine/rng.js';
 
-const SIDES = ['us', 'de'];
 /** Usefulness of a card in hand, for bidding the least useful one. */
-export const KEEP = { PS: 9, R: 8, S: 6, M: 6, SN: 6, SL: 5, PG: 5, MO: 4, FOW: 0 };
+const KEEP = { PS: 9, R: 8, S: 6, M: 6, SN: 6, SL: 5, PG: 5, MO: 4, FOW: 0 };
 /** Value of hitting an enemy unit. */
-export const WORTH = { R: 60, S: 30, M: 38, SN: 40, MO: 35 };
+const WORTH = { R: 60, S: 30, M: 38, SN: 40, MO: 35 };
 const BOLSTER = { R: 10, S: 7, M: 6, SN: 5, MO: 3, SL: 4, PG: 2, PS: 8 };
 /** The same when this side wins by pinning: it needs firepower (Suppress 4, Attack 3), not Riflemen to Control. */
 const BOLSTER_PIN = { R: 7, S: 5, M: 10, SN: 11, MO: 6, SL: 4, PG: 2, PS: 8 };
@@ -18,24 +17,18 @@ const BOLSTER_PIN = { R: 7, S: 5, M: 10, SN: 11, MO: 6, SL: 4, PG: 2, PS: 8 };
 // that finds only cover 1 on a hill, comes first (STAGING.mortar)
 export const bolsterOf = (cx, kind) => (kind === 'MO' && cx.siege ? STAGING.mortar : (cx.pinGame ? BOLSTER_PIN : BOLSTER)[kind]);
 
-/** Chance that n d10 roll at least one 0 or one die ≥ total. */
-export function hitChance(total, n) {
-    const p = (total >= 10 ? 1 : 11 - Math.max(total, 1)) / 10;
-    return 1 - (1 - Math.min(p, 1)) ** n;
-}
-
-export const kindOf = (uid) => {
-    const t = unitType(uid);
-    return t === 'MO' || t === 'SN' ? t : t[0];
-};
+export const kindOf = (uid) => unitKind(unitType(uid));
+/** How much a better tile counts for a unit: a Rifleman's place matters more than anyone else's. */
+export const placeWeight = (uid) => (kindOf(uid) === 'R' ? 2.2 : 1.2);
 
 /**
  * Factors on an objective's value (see `worth` in context). An objective that wins the game, that we have a marker on
  * and no enemy counter stops us from taking, adds `winOpen` and costs `winPull` (not 14) per step: a Rifleman goes
  * for it rather than stay on a blocked one, and each step there beats a shot (the user's game of scenario 12: on 9 of
  * 10 points, Germany sat 8 rounds on 7B under fire while 17B, scouted and empty, gave the game; docs/02 §5.2).
+ * `claim` and `freeTile`: what a Scout gives for a marker on a free objective, and how much sooner it goes there (`claims`).
  */
-export const GOAL = { blocked: 0.7, winning: 2.5, radioScore: 200, winOpen: 150, winPull: 42 };
+export const GOAL = { blocked: 0.7, winning: 2.5, radioScore: 200, winOpen: 150, winPull: 42, claim: 30, freeTile: 1.5 };
 
 /**
  * A siege: every objective a side goes for has an enemy counter on it that stops its Control (Normandy rule), as
@@ -48,7 +41,7 @@ export const GOAL = { blocked: 0.7, winning: 2.5, radioScore: 200, winOpen: 150,
 export const STAGING = { expose: 15, mortar: 11, target: 1.5 };
 
 /** Dice of the strongest fire of each kind of unit, for guessing what the enemy could do next turn. */
-export const FIRE = { R: 1, S: 1, M: 2, SN: 3, MO: 0 };
+const FIRE = { R: 1, S: 1, M: 2, SN: 3, MO: 0 };
 
 /** Expected hits on a unit standing on `tile` if every ready enemy fires at it once. */
 export function exposure(cx, uid, tile) {
@@ -95,7 +88,9 @@ export function context(view, seat) {
     const reach = (t) => (rifles.length ? 3 / (2 + Math.min(...rifles.map((u) => d(u.tile, t)))) : 1);
     const siege = goals.length > 0 && goals.every(blocked);
     const winsAt = (t) => wins(t, view.objectives[t]);
-    return { sc, b, me, them, seat, units, mine, foes, goals, pinGame, marked, d, view, worth, blocked, winsAt, siege, reach, pump };
+    // a free objective: nobody controls it or has a marker on it, and no enemy counter stops our Control
+    const free = (t) => Boolean(need) && Boolean(view.objectives[t]) && !marked(t) && !blocked(t) && !view.control[t][them];
+    return { sc, b, me, them, seat, units, mine, foes, goals, pinGame, marked, d, view, worth, blocked, winsAt, siege, reach, pump, free, have, theirs };
 }
 
 /** How good a tile is for a unit (higher is better), less what it risks under the enemy mortar's target. */
@@ -126,7 +121,7 @@ function placeValue(cx, uid, tile) {
         const open = goals.filter((t) => !cx.marked(t));
         const list = open.length ? open : goals;
         if (!list.length) return 0;
-        return Math.max(...list.map((gt) => cx.worth(gt) * cx.reach(gt) * 4 - 10 * d(tile, gt)));
+        return Math.max(...list.map((gt) => cx.worth(gt) * cx.reach(gt) * 4 * (cx.free(gt) ? GOAL.freeTile : 1) - 10 * d(tile, gt)));
     }
     const rif = foes.filter((f) => kindOf(f.id) === 'R');
     const near = rif.length ? Math.min(...rif.map((f) => d(tile, f.tile))) : 3;
@@ -171,7 +166,7 @@ function threat(cx, uid) {
     const { view, them, d } = cx;
     const at = posOf(cx, uid);
     const need = cx.sc.win[them].points;
-    const have = pointsOf(cx, 1 - cx.seat);
+    const have = cx.theirs;
     let best = 0;
     for (const [t, val] of Object.entries(view.objectives)) {
         const held = view.control[t][them] === 'controlled';
@@ -185,13 +180,41 @@ function threat(cx, uid) {
     return best;
 }
 
-export function targetValue(cx, uid) {
+function targetValue(cx, uid) {
     let v = WORTH[kindOf(uid)];
     if (kindOf(uid) === 'R') {
         if (cx.pinGame) v *= 1.6;
         v += 25 * threat(cx, uid);
     }
     return v;
+}
+
+function controlScore(cx, tile) {
+    const val = cx.view.objectives[tile] ?? 0;
+    if (!val) return 2;
+    const need = cx.sc.win[cx.me].points;
+    // on the radio we already hold [D-31], Control adds one point (the tile's value already counts); worth more
+    // than a step towards another objective (GOAL.radioScore, measured)
+    if (cx.pump(tile)) return (need && cx.have + 1 >= need ? 1000 : 0) + GOAL.radioScore;
+    return (need && cx.have + val >= need ? 1000 : 0) + 100 + 30 * val;
+}
+
+function fireScore(cx, o, tile) {
+    let best = 0;
+    for (const f of cx.foes) {
+        if (o.action === 'suppress' && f.suppressed) continue;
+        const total = defenceOf(f.id) + coverOf(f.tile, { fromTile: tile }) + cx.d(tile, f.tile);
+        const s = hitChance(total, o.value) * targetValue(cx, f.id) * (o.action === 'suppress' ? 0.5 : 1);
+        best = Math.max(best, s);
+    }
+    return best;
+}
+
+function moveScore(cx, o, uid, from) {
+    if (!from) return 20; // brings the unit onto the board
+    const best = bestReach(cx, uid, from, o.value, o.action === 'move' ? 'move' : 'free');
+    const s = (best.v - tileValue(cx, uid, from)) * placeWeight(uid);
+    return o.action === 'scout' ? s + newMarkers(cx, from, best.tile) * 6 - fogCost(cx.view.players[cx.seat]) + claims(cx, from, best.tile) : s;
 }
 
 export function scorePlay(cx, o) {
@@ -210,29 +233,11 @@ export function scorePlay(cx, o) {
     const uid = unitOf(seat, o.card);
     const from = uid && (posOf(cx, uid) ?? null);
     switch (o.action) {
-        case 'control': {
-            const tile = from ?? spawnGuess(cx, uid);
-            const val = view.objectives[tile] ?? 0;
-            if (!val) return 2;
-            const have = pointsOf(cx, seat);
-            const need = cx.sc.win[cx.me].points;
-            // on the radio we already hold [D-31], Control adds one point (the tile's value already counts); worth more
-            // than a step towards another objective (GOAL.radioScore, measured)
-            if (cx.pump(tile)) return (need && have + 1 >= need ? 1000 : 0) + GOAL.radioScore;
-            return (need && have + val >= need ? 1000 : 0) + 100 + 30 * val;
-        }
+        case 'control':
+            return controlScore(cx, from ?? spawnGuess(cx, uid));
         case 'attack':
-        case 'suppress': {
-            const tile = from ?? spawnGuess(cx, uid);
-            let best = 0;
-            for (const f of cx.foes) {
-                if (o.action === 'suppress' && f.suppressed) continue;
-                const total = defenceOf(f.id) + coverOf(f.tile, { fromTile: tile }) + cx.d(tile, f.tile);
-                const s = hitChance(total, o.value) * targetValue(cx, f.id) * (o.action === 'suppress' ? 0.5 : 1);
-                best = Math.max(best, s);
-            }
-            return best;
-        }
+        case 'suppress':
+            return fireScore(cx, o, from ?? spawnGuess(cx, uid));
         case 'blast': {
             const t = view.targets[seat];
             let s = 0;
@@ -249,15 +254,8 @@ export function scorePlay(cx, o) {
         }
         case 'move':
         case 'scout':
-        case 'stalk': {
-            if (!from) return 20; // brings the unit onto the board
-            const mode = o.action === 'move' ? 'move' : 'free';
-            const best = bestReach(cx, uid, from, o.value, mode);
-            const gain = best.v - tileValue(cx, uid, from);
-            let s = gain * (kindOf(uid) === 'R' ? 2.2 : 1.2);
-            if (o.action === 'scout') s += newMarkers(cx, from, best.tile) * 6 - fogCost(p);
-            return s;
-        }
+        case 'stalk':
+            return moveScore(cx, o, uid, from);
         case 'recon':
             return 38;
         case 'conceal':
@@ -278,7 +276,7 @@ export function scorePlay(cx, o) {
             for (const u of cx.mine) {
                 if (u.suppressed) continue;
                 const r = bestReach(cx, u.id, u.tile, o.value, 'move');
-                best = Math.max(best, (r.v - tileValue(cx, u.id, u.tile)) * (kindOf(u.id) === 'R' ? 2.2 : 1.2));
+                best = Math.max(best, (r.v - tileValue(cx, u.id, u.tile)) * placeWeight(u.id));
             }
             return best;
         }
@@ -287,19 +285,29 @@ export function scorePlay(cx, o) {
     }
 }
 
-export const fogCost = (p) => 4 + p.discard.filter((c) => typeId(c) === 'FOW').length;
+const fogCost = (p) => 4 + p.discard.filter((c) => typeId(c) === 'FOW').length;
 
-/** Tiles on the way from `from` to `to` (end included) that have no marker of this side yet. */
-function newMarkers(cx, from, to) {
-    if (from === to) return 0;
+/** Tiles on the way from `from` to `to`, end included, not `from`. */
+function pathTo(cx, from, to) {
+    if (from === to) return [];
     const path = [to];
     let cur = to;
     while (cx.d(from, cur) > 1) {
         cur = cx.b.adj[cur].find((a) => cx.d(from, a) === cx.d(from, cur) - 1);
         path.push(cur);
     }
-    return path.filter((t) => !cx.marked(t)).length;
+    return path;
 }
+
+/** How many tiles on the way from `from` to `to` have no marker of this side yet. */
+const newMarkers = (cx, from, to) => pathTo(cx, from, to).filter((t) => !cx.marked(t)).length;
+
+/**
+ * A marker on a free objective: nobody controls it, no enemy counter stops our Control, and our side has none there
+ * yet. Worth more than a shot where a Rifleman of ours could use it soon (the user's game of scenario 12, docs/02
+ * §5.2: Germany's Scouts fired for five rounds while 1B and 6A, free, gave US the game).
+ */
+const claims = (cx, from, to) => pathTo(cx, from, to).filter(cx.free).reduce((n, t) => n + GOAL.claim * cx.view.objectives[t] * cx.reach(t), 0);
 
 function spawnGuess(cx, uid) {
     const type = unitType(uid);
@@ -308,13 +316,7 @@ function spawnGuess(cx, uid) {
     return (sp.find((s) => s.who.includes(name)) ?? sp.find((s) => s.who.includes('all'))).tile;
 }
 
-function pointsOf(cx, seat) {
-    let n = 0;
-    for (const [t, v] of Object.entries(cx.view.objectives)) if (cx.view.control[t][SIDES[seat]] === 'controlled') n += v;
-    return n;
-}
-
-export function bestTarget(cx, uid) {
+function bestTarget(cx, uid) {
     const from = posOf(cx, uid) ?? spawnGuess(cx, uid);
     let best = { tile: null, v: 0 };
     for (const t of cx.b.ids) {
@@ -329,18 +331,12 @@ export function bestTarget(cx, uid) {
 }
 
 export function heuristicBot(seed) {
-    let t = seedFrom(seed);
-    const rand = () => {
-        t = (t + 0x6d2b79f5) >>> 0;
-        let x = Math.imul(t ^ (t >>> 15), t | 1);
-        x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
-        return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
-    };
+    const stream = { rng: seedFrom(seed) };
     const pick = (opts, score) => {
         let best = null;
         let bs = -Infinity;
         for (const o of opts) {
-            const s = score(o) + rand() * 0.5;
+            const s = score(o) + nextRandom(stream) * 0.5;
             if (s > bs) (bs = s), (best = o);
         }
         return best.id;

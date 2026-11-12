@@ -1,0 +1,9 @@
+name: Idea / Sugerencia
+description: Something that would make the companion better / Algo que mejoraría el compañero
+labels: [enhancement]
+body:
+  - type: textarea
+    attributes:
+      label: Your idea / Tu idea
+    validations:
+      required: true

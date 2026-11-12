@@ -6,13 +6,17 @@ import { seedFrom, shuffle } from './rng.js';
 import { SIDES, TYPES, scenarioById, typeOf, unitOfCard, unitType } from './data.js';
 import { boardOf } from './board.js';
 
-const MAX_ROUNDS = 60; // [D-33] safety net, not a rule
+const MAX_ROUNDS = 60; // [D-33] safety net for games between bots, not a rule
+
+/** The setup of a game someone is playing: it has no round limit ([D-33]). Also for saved games and codes from before. */
+export const withoutRoundLimit = (setup) => ({ ...setup, maxRounds: 9999 });
 
 export function normalizeSetup(setup) {
     const scenario = Number(setup.scenario ?? 1);
     scenarioById(scenario);
     const controlRule = setup.controlRule === 'northAfrica' ? 'northAfrica' : 'normandy'; // docs/01 §13
     const out = { scenario, seed: String(setup.seed ?? 'normandy'), maxRounds: setup.maxRounds ?? MAX_ROUNDS, controlRule };
+    if (scenarioById(scenario).variants?.[setup.variant]) out.variant = setup.variant; // docs/02 §5.5
     // the companion (docs/02 §7.4): one seat plays with a physical deck and dice; botDice 'physical' = the player
     // also rolls the bot's dice
     if (setup.external === 0 || setup.external === 1) {
@@ -22,8 +26,26 @@ export function normalizeSetup(setup) {
     return out;
 }
 
+/** What a scenario starts with, once its variant (if any) is applied: a house rule, not the book's (docs/02 §5.5). */
+function startOf(sc, name) {
+    const v = sc.variants?.[name];
+    if (!v) return sc;
+    const out = structuredClone({ control: sc.control, units: sc.units, cards: sc.cards });
+    for (const [tile, marks] of Object.entries(v.control ?? {})) out.control[tile] = { ...out.control[tile], ...marks };
+    for (const side of SIDES) {
+        Object.assign(out.units[side], v.units?.[side]);
+        const { deck, supply } = out.cards[side];
+        for (const [type, n] of Object.entries(v.toDeck?.[side] ?? {})) {
+            supply[type] -= n;
+            deck[type] = (deck[type] ?? 0) + n;
+        }
+    }
+    return out;
+}
+
 export function createState(setup) {
     const sc = scenarioById(setup.scenario);
+    const start = startOf(sc, setup.variant);
     const g = {
         setup,
         scenario: sc.id,
@@ -42,12 +64,12 @@ export function createState(setup) {
         result: null,
         pending: null,
     };
-    for (const t of sc.tiles) g.control[t.id] = { us: null, de: null, ...sc.control[t.id] };
+    for (const t of sc.tiles) g.control[t.id] = { us: null, de: null, ...start.control[t.id] };
     SIDES.forEach((side, seat) => {
         const p = { side, deck: [], hand: [], discard: [], play: [], supply: [], removed: [], bid: null };
         const n = {};
         for (const [where, list] of [['deck', p.deck], ['supply', p.supply]]) {
-            for (const [type, count] of Object.entries(sc.cards[side][where])) {
+            for (const [type, count] of Object.entries(start.cards[side][where])) {
                 for (let i = 0; i < count; i++) list.push(`${side}:${type}:${(n[type] = (n[type] ?? 0) + 1)}`);
             }
         }
@@ -55,10 +77,10 @@ export function createState(setup) {
         g.players.push(p);
         // a counter for every unit with cards in the game, on the board if the scenario places it
         const types = new Set([...p.deck, ...p.supply].map((c) => TYPES[c.split(':')[1]].unit).filter(Boolean));
-        for (const type of Object.keys(sc.units[side])) types.add(type);
+        for (const type of Object.keys(start.units[side])) types.add(type);
         for (const type of [...types].sort()) {
             const id = `${side}:${type}`;
-            g.units[id] = { id, seat, type, tile: sc.units[side][type] ?? null, suppressed: false };
+            g.units[id] = { id, seat, type, tile: start.units[side][type] ?? null, suppressed: false };
         }
     });
     return g;

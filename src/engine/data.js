@@ -39,3 +39,9 @@ export function coverOf(tile, { blast = false, fromTile = null } = {}) {
     if (c !== 'hill') return c;
     return blast || (fromTile && TILES[fromTile].cover === 'hill') ? 1 : 3;
 }
+
+/** Chance that n d10 roll at least one 0 or one die ≥ total. */
+export function hitChance(total, n) {
+    const p = (total >= 10 ? 1 : 11 - Math.max(total, 1)) / 10;
+    return 1 - (1 - Math.min(p, 1)) ** n;
+}

@@ -200,5 +200,8 @@
  "title": {
   "en": "Raid Across the Canal",
   "es": "Incursión a través del canal"
+ },
+ "bot": {
+  "de": "heuristic"
  }
 }

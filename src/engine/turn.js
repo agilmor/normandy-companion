@@ -149,7 +149,9 @@ export function* playerTurn(g, seat) {
         yield* doAction(g, seat, cid, action);
         checkWin(g, seat);
     }
+    // cards left in hand go to the discard pile, which anyone may look at (docs/01 §13): the log says which
     if (isExternal(g, seat)) yield* leftovers(g, seat);
+    else if (p.hand.length) log(g, 'leftover', { seat, cards: p.hand.map(typeId).sort() });
     p.discard.push(...p.hand.splice(0), ...p.play.splice(0));
     log(g, 'endTurn', { seat });
 }

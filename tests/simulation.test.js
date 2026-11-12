@@ -79,3 +79,13 @@ test('planning bot: the state it rebuilds from its view has the same cards in ea
         }
     }
 });
+
+test('the cards a player ends its turn with go to the log: the discard pile is public', () => {
+    const s = new Session({ scenario: 1, seed: 'left' });
+    while (s.pending.kind !== 'play') s.act(s.pending.options[0].id);
+    const p = s.state.players[s.pending.seat];
+    const hand = p.hand.map((c) => c.split(':')[1]).sort();
+    assert.ok(hand.length > 0);
+    s.act('end');
+    assert.deepEqual(s.state.log.findLast((e) => e.k === 'leftover').cards, hand);
+});

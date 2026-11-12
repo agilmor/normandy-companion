@@ -23,6 +23,15 @@ export function layout(sc) {
     return { W, H, pos: (tile) => at[tile] };
 }
 
+/** The tile under a point of the map, if any. */
+export function tileAtPoint(sc, x, y) {
+    const { pos } = layout(sc);
+    return sc.tiles.find((tile) => {
+        const [tx, ty] = pos(tile.id);
+        return x >= tx && x < tx + T && y >= ty && y < ty + T;
+    })?.id ?? null;
+}
+
 /** Cover as the class of a tile's colour: open ground to heavy cover, and hills. */
 const coverClass = (c) => (c === 'hill' ? 'hill' : `c${c}`);
 
@@ -128,7 +137,7 @@ export function drawMap(view, { picks = new Map(), onPick = () => {}, viewer, fo
             const pick = picks.get(`unit:${u.id}`);
             const side = SIDES[u.seat];
             const el = s('g', { class: `ccounter ${side}${u.suppressed ? ' suppressed' : ''}${pick ? ' pickable' : ''}${focus.unit === u.id ? ' focus' : ''}`,
-                'data-pick': pick, 'data-unit': u.id, onclick: pick ? (ev) => { ev.stopPropagation(); onPick(pick); } : null });
+                'data-pick': pick, 'data-now': pick?.startsWith('sel:') ? 'true' : undefined, 'data-unit': u.id, onclick: pick ? (ev) => { ev.stopPropagation(); onPick(pick); } : null });
             el.append(s('circle', { cx, cy, r }));
             el.append(s('text', { x: cx, y: cy - r * 0.05, class: 'cn', 'font-size': r * 0.5 }, shortName(u.id)));
             el.append(s('text', { x: cx, y: cy + r * 0.55, class: 'cd', 'font-size': r * 0.42 }, u.suppressed ? `⬇ ${defenceOf(u.id)}` : defenceOf(u.id)));

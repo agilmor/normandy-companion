@@ -10,7 +10,7 @@
 //
 // The position is judged by the heuristic bot's own measures (points, where each unit stands, the cards it owns),
 // less the risk to Riflemen standing under fire, but not when the enemy wins by pinning: that side's one way to win
-// is to get there fast (`exposurePin`). Sub-decisions follow the plan; anything it did not plan (an Attack's target,
+// is to get there fast (docs/02 §5.2). Sub-decisions follow the plan; anything it did not plan (an Attack's target,
 // the bid) is left to the heuristic bot.
 
 import { GameEnd } from '../engine/ask.js';
@@ -19,7 +19,7 @@ import { seedFrom } from '../engine/rng.js';
 import { points, spawn, spawnTile } from '../engine/state.js';
 import { playerTurn } from '../engine/turn.js';
 import { view as viewOf } from '../engine/view.js';
-import { bolsterOf, context, exposure, heuristicBot, kindOf, scorePlay, tileValue } from './heuristicBot.js';
+import { bolsterOf, context, exposure, heuristicBot, kindOf, placeWeight, scorePlay, tileValue } from './heuristicBot.js';
 
 /** Actions whose result depends on dice or draws: played on paper, valued by the heuristic. */
 const CHANCE = new Set(['attack', 'suppress', 'blast', 'command', 'recon']);
@@ -140,18 +140,41 @@ function replay(g0, seat, line) {
  * that many times more, against enemy Riflemen up to that far (a Rifleman with Inspire and Guide covers 4 or 5 tiles
  * in two turns; only for a side that wins by pinning, which has nothing else to do with an objective). `enemyFog`:
  * each Fog of War in the enemy's deck, hand and discard pile (what Conceal gives them; without it Conceal looked like a wasted card).
- * `exposurePin`: the risk to a Rifleman when the enemy wins by pinning. It was 30 (heavier, as losing them loses the
- * game), but it kept US back in scenario 6, where it needs one Control 5 tiles away: 37 % there against 73 % for US
- * among players on BGG; with 0, 55 %, and US also gains in the 9, 2 and 5 (docs/02 §5.2). 5 or 12 did not help the 6.
+ * `exposure` does not apply when the enemy wins by pinning: heavier there (30), as losing Riflemen loses the game, it
+ * kept US back in scenario 6, where it needs one Control 5 tiles away (docs/02 §5.2).
  */
-export const WEIGHTS = { points: 130, exposure: 12, exposurePin: 0, enemyFog: 8, goalMarker: 20, hold: 70, holdWin: 5, holdFar: 5 };
+export const WEIGHTS = { points: 130, exposure: 12, enemyFog: 8, goalMarker: 20, hold: 70, holdWin: 5, holdFar: 5 };
+
+/** Every card a player still owns, wherever it is. */
+const owned = (p) => [...p.deck, ...p.hand, ...p.discard, ...p.play];
+
+/**
+ * Holding: with the Normandy rule a counter of ours on an objective we control stops the enemy taking it, so it is
+ * worth its value times how close the enemy Riflemen are (one counter is enough; North Africa: no blocking).
+ */
+function holdValue(g, seat, cx) {
+    if (g.setup.controlRule === 'northAfrica') return 0;
+    const w = WEIGHTS;
+    const rifles = cx.foes.filter((f) => kindOf(f.id) === 'R');
+    const need = cx.sc.win[cx.them].points;
+    const theirs = points(g, 1 - seat);
+    let v = 0;
+    for (const [t, val] of Object.entries(g.objectives)) {
+        if (!val || g.control[t][cx.me] !== 'controlled' || !cx.mine.some((u) => u.tile === t)) continue;
+        const near = Math.min(9, ...rifles.map((f) => cx.d(f.tile, t)));
+        const wins = !cx.sc.win[cx.me].points && Boolean(need) && theirs + val >= need; // only when holding off is all we do
+        if (wins && near <= w.holdFar) v += w.hold * val * w.holdWin / (1 + near / 2);
+        else if (near <= 2) v += w.hold * val / (1 + near);
+    }
+    return v;
+}
 
 /**
  * How good the position is for `seat` at the end of its turn, in the heuristic bot's units (so a planned line and a
  * chance action on paper compare): points held, where each unit stands, Riflemen in the open, the cards it owns.
  */
-export function evaluate(g, seat, weights = {}, goals = null) {
-    const w = { ...WEIGHTS, ...weights };
+function evaluate(g, seat, goals = null) {
+    const w = WEIGHTS;
     const cx = context(viewOf(g, seat), seat);
     // units are placed against the objectives as they were when the turn began: taking one this turn must not make
     // the Rifleman standing on it worth less than before (the points already count it)
@@ -159,49 +182,31 @@ export function evaluate(g, seat, weights = {}, goals = null) {
     let v = w.points * (points(g, seat) - points(g, 1 - seat));
     const pinned = Boolean(cx.sc.win[cx.them].pin); // losing every Rifleman on the board loses the game
     const p = g.players[seat];
-    const live = new Set([...p.deck, ...p.hand, ...p.discard, ...p.play].map(unitOfCard));
+    const live = new Set(owned(p).map(unitOfCard));
     for (const u of Object.values(g.units)) {
         if (u.seat !== seat || u.tile || !live.has(u.id)) continue;
         // off the board but with cards to bring it in: as good as standing on its spawn tile, less a card to enter
         // (else a unit far from the objectives would be worth more off the board than on it)
-        const k = kindOf(u.id);
-        v += (tileValue(cx, u.id, spawnTile(g, seat, u.type)) - 10) * (k === 'R' ? 2.2 : 1.2);
+        v += (tileValue(cx, u.id, spawnTile(g, seat, u.type)) - 10) * placeWeight(u.id);
     }
     for (const u of cx.mine) {
         const k = kindOf(u.id);
-        v += tileValue(cx, u.id, u.tile) * (k === 'R' ? 2.2 : 1.2);
+        v += tileValue(cx, u.id, u.tile) * placeWeight(u.id);
         if (u.suppressed) v -= k === 'R' ? 40 : 20;
-        if (k === 'R') v -= exposure(cx, u.id, u.tile) * (pinned ? w.exposurePin : w.exposure);
+        if (k === 'R' && !pinned) v -= exposure(cx, u.id, u.tile) * w.exposure;
     }
-    for (const c of [...p.deck, ...p.hand, ...p.discard, ...p.play]) {
+    for (const c of owned(p)) {
         const t = typeOf(c);
         v += t.fog ? -5 : 2.5 * (bolsterOf(cx, t.kind) ?? 1);
     }
-    if (w.enemyFog) {
-        const e = g.players[1 - seat];
-        v += w.enemyFog * [...e.deck, ...e.hand, ...e.discard, ...e.play].filter((c) => typeOf(c).fog).length;
-    }
+    v += w.enemyFog * owned(g.players[1 - seat]).filter((c) => typeOf(c).fog).length;
     // markers: each one opens the way; one on an objective not yet held is where a Rifleman can go and Control
     for (const t of Object.keys(g.control)) {
         if (!g.control[t][cx.me]) continue;
         v += 6;
         if (g.objectives[t] && g.control[t][cx.me] !== 'controlled') v += w.goalMarker * cx.worth(t) * cx.reach(t);
     }
-    // holding: with the Normandy rule a counter of ours on an objective we control stops the enemy taking it, so it
-    // is worth its value times how close the enemy Riflemen are (one counter is enough; North Africa: no blocking)
-    if (g.setup.controlRule !== 'northAfrica' && w.hold) {
-        const rifles = cx.foes.filter((f) => kindOf(f.id) === 'R');
-        const need = cx.sc.win[cx.them].points;
-        const theirs = points(g, 1 - seat);
-        for (const [t, val] of Object.entries(g.objectives)) {
-            if (!val || g.control[t][cx.me] !== 'controlled' || !cx.mine.some((u) => u.tile === t)) continue;
-            const near = Math.min(9, ...rifles.map((f) => cx.d(f.tile, t)));
-            const wins = !cx.sc.win[cx.me].points && Boolean(need) && theirs + val >= need; // only when holding off is all we do
-            if (wins && near <= w.holdFar) v += w.hold * val * w.holdWin / (1 + near / 2);
-            else if (near <= 2) v += w.hold * val / (1 + near);
-        }
-    }
-    return v;
+    return v + holdValue(g, seat, cx);
 }
 
 /** The answers worth trying for a request met while planning, best first by the heuristic's own measure. */
@@ -237,7 +242,7 @@ function children(g, seat, req, pick) {
 }
 
 /** The best line for `seat` from its current "play a card" decision (`onLine` sees every line tried, for tools). */
-export function plan(view, seat, pick, weights, onLine = null) {
+export function plan(view, seat, pick, onLine = null) {
     const g0 = determinize(view, seat);
     const goals = context(view, seat).goals;
     let best = { score: -Infinity, line: ['end'] };
@@ -247,7 +252,7 @@ export function plan(view, seat, pick, weights, onLine = null) {
         const r = replay(g0, seat, line);
         let score;
         if (r.over) score = r.g.result.winner === seat ? 1e6 : -1e6;
-        else if (!r.req) score = evaluate(r.g, seat, weights, goals) + r.bonus;
+        else if (!r.req) score = evaluate(r.g, seat, goals) + r.bonus;
         if (score !== undefined) {
             onLine?.(score, line);
             if (score > best.score) best = { score, line };
@@ -263,12 +268,12 @@ export function plan(view, seat, pick, weights, onLine = null) {
     return best.line;
 }
 
-export function planBot(seed, weights) {
+export function planBot(seed) {
     const heuristic = heuristicBot(seed);
     let line = [];
     return (req, view) => {
         if (req.kind === 'play') {
-            line = plan(view, req.seat, heuristic, weights);
+            line = plan(view, req.seat, heuristic);
             const a = line.shift() ?? 'end';
             return typeof a === 'string' ? a : a.option.id;
         }

@@ -22,9 +22,10 @@ export function guideSteps(entries, me, before, after) {
     const out = [];
     const un = (uid) => unitName(uid, me);
     let head = null; // the computer's card being played
+    let played = null; // the part of `head` to stand out: its card and action
     let lastAttack = null;
     let at = 0;
-    const push = (step) => out.push({ head: step.mine ? null : head, side: SIDES[step.mine ? me : bot], at, ...step });
+    const push = (step) => out.push({ head: step.mine ? null : head, played: step.mine ? null : played, side: SIDES[step.mine ? me : bot], at, ...step });
     for (let i = 0; i < entries.length; i++) {
         at = i;
         const e = entries[i];
@@ -34,15 +35,16 @@ export function guideSteps(entries, me, before, after) {
                 const ini = (c) => (c ? TYPES[c].initiative : 0);
                 const name = (c) => (c ? cardName(c) : '—');
                 const text = [t('cmp.g.bids', { mine: name(e.cards[me]), a: ini(e.cards[me]), theirs: name(e.cards[bot]), b: ini(e.cards[bot]) }),
-                    t(e.kept ? 'cmp.g.kept' : 'cmp.g.initiative', { side: e.initiative === me ? t('cmp.you') : t('cmp.bot') })].join(' ');
+                    t(e.kept ? 'cmp.g.kept' : 'cmp.g.initiative', { side: e.initiative === me ? t('cmp.toYou') : t('cmp.bot') })].join(' ');
                 push({ text, kind: 'info', mine: true });
                 break;
             }
             case 'turn':
-                head = null;
+                head = played = null;
                 break;
             case 'play':
                 if (mine) break;
+                played = `${cardName(e.card)}: ${actionName(e.action, e.value)}`; // as cmp.g.botPlays writes them
                 head = t('cmp.g.botPlays', { card: cardName(e.card), action: actionName(e.action, e.value) });
                 // a card whose effects do not touch the table (Bolster, Command, Inspire…): the card itself is the step
                 if (!entries.slice(i + 1).some((x, j, rest) => x.seat === bot && ['move', 'spawn', 'scouted', 'control', 'target', 'blast', 'attack', 'radio'].includes(x.k)

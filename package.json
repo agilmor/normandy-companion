@@ -1,6 +1,8 @@
 {
   "name": "normandy-companion",
+  "version": "0.1.0-beta",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "Unofficial solo companion for the board game Undaunted: Normandy: plays the other side against you, with your physical copy",
   "scripts": {

@@ -3,18 +3,22 @@
 // decision with big buttons (the card they play and what it does, the tile, the target, hit or miss, where a
 // casualty's card comes from). The computer plays its side through view(g, seat) only; the player's seat is
 // external (src/engine, setup.external), so the app never sees their hand: it offers only what they may hold.
-// Undo goes back to before the player's last answer; the game is saved after each one.
+// Undo goes back to before the player's last answer; the game is saved after each one. On a phone the map zooms and
+// pans (src/ui/zoom.js), a long press tells what is on a tile, and the menu folds into ☰.
 
 import { h } from '../src/ui/dom.js';
 import { t, tr } from '../src/i18n/index.js';
 import { Session, makeRecord, encodeRecord } from '../src/engine/session.js';
-import { scenarioById, unitType } from '../src/engine/data.js';
+import { CONTACT, bugMail, appKind } from './contact.js';
+import { withoutRoundLimit } from '../src/engine/state.js';
+import { TILES, hitChance, scenarioById, unitType } from '../src/engine/data.js';
 import { computerBot } from '../src/ai/computerBot.js';
-import { hitChance } from '../src/ai/heuristicBot.js';
 import { actionName, cardName, logLine, resultText, sideName, unitName } from '../src/ui/text.js';
 import { diceTray } from '../src/ui/combat.js';
 import { sfx, loadSamples } from '../src/ui/sound.js';
-import { drawMap } from './map.js';
+import { BoardZoom } from '../src/ui/zoom.js';
+import { canFullscreen, isFullscreen, toggleFullscreen } from '../src/ui/touch.js';
+import { coverText, drawMap, tileAtPoint } from './map.js';
 import { boardAt, guideSteps } from './guide.js';
 import { deckPanel } from './cards.js';
 
@@ -54,7 +58,7 @@ export class CompanionView {
     constructor(root, game, { onExit } = {}) {
         this.root = root;
         this.onExit = onExit;
-        this.session = new Session(game.setup, game.answers ?? []);
+        this.session = new Session(withoutRoundLimit(game.setup), game.answers ?? []);
         this.me = this.session.setup.external;
         this.botSeat = 1 - this.me;
         this.sc = scenarioById(this.session.setup.scenario);
@@ -65,10 +69,14 @@ export class CompanionView {
         this.busy = false;
         this.modal = h('div', { class: 'modal', hidden: true, onclick: (e) => { if (e.target === this.modal) this.hideModal(); } });
         this.top = h('header', { class: 'bar' });
-        this.mapEl = h('div', { class: 'map-frame' });
+        // the map's frame outlives every render: the zoom stays while the map is redrawn
+        this.zoom = new BoardZoom({ onInfo: (x, y) => this.showTile(x, y), tapAgain: (pick) => t('touch.tapAgain', { what: this.labelOf(pick) }), resetLabel: t('board.reset') });
         this.panel = h('aside', { class: 'panel' });
-        this.root.replaceChildren(h('div', { class: 'cplay' }, this.top, h('main', {}, this.mapEl, this.panel), this.modal));
+        this.root.replaceChildren(h('div', { class: 'cplay' }, this.top, h('main', {}, this.zoom.el, this.panel), this.modal));
         loadSamples();
+        // leaving full screen with Back or Esc changes the menu's label too
+        this.onFullscreen = () => { if (!this.disposed) this.renderTop(this.view()); };
+        for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(ev, this.onFullscreen);
         // a new game starts with the steps of its first round (draw your cards); a saved one where it was
         if (!game.answers?.length) this.steps = this.stepsOf(this.session.state.log, this.view());
         this.runBot(0, null);
@@ -76,6 +84,7 @@ export class CompanionView {
 
     dispose() {
         this.disposed = true;
+        for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) document.removeEventListener(ev, this.onFullscreen);
     }
 
     view() {
@@ -155,7 +164,8 @@ export class CompanionView {
             if (req.kind === 'roll' || req.kind === 'casualty') focus = { unit: req.target ?? req.unit };
             if (req.kind === 'move') focus = { unit: req.unit };
         }
-        this.mapEl.replaceChildren(drawMap(step?.board ?? view, { picks, onPick: (id) => this.pick(id), viewer: this.me, focus, arrow, terrain: pref('terrain') !== false }));
+        this.shown = step?.board ?? view;
+        this.zoom.show(drawMap(this.shown, { picks, onPick: (id) => this.pick(id), viewer: this.me, focus, arrow, terrain: pref('terrain') !== false }));
         const main = step ? this.stepCard(step) : this.busy ? h('div', { class: 'card-box thinking' }, t('cmp.thinking'))
             : this.session.over ? this.endCard() : req ? this.askCard(req, view) : null;
         this.panel.replaceChildren(main ?? '', deckPanel(view, this.me), this.botPanel(view), this.logPanel(view));
@@ -175,10 +185,33 @@ export class CompanionView {
             ...score,
             h('span', { class: 'grow' }),
             h('button', { onclick: () => this.undo(), disabled: this.busy || !this.marks.length }, `↶ ${t('cmp.menu.undo')}`),
-            h('button', { onclick: () => this.showCheck() }, t('cmp.menu.check')),
-            h('button', { onclick: () => { setPref('dice3d', pref('dice3d') === false); this.render(); } }, t(pref('dice3d') === false ? 'ui.diceOff' : 'ui.diceOn')),
-            h('button', { onclick: () => this.copyCode() }, t('cmp.menu.code')),
-            h('button', { onclick: () => this.exit() }, t('cmp.menu.exit')));
+            h('span', { class: 'extras' }, this.menuItems().map(([label, fn]) => h('button', { onclick: fn }, label))),
+            h('button', { class: 'menu-btn', title: t('cmp.menu'), onclick: () => this.showMenu() }, '☰'));
+    }
+
+    /** What the bar offers beside Undo; on a phone it goes behind ☰. */
+    menuItems() {
+        return [
+            [t('cmp.menu.check'), () => this.showCheck()],
+            [t(pref('dice3d') === false ? 'ui.diceOff' : 'ui.diceOn'), () => {
+                setPref('dice3d', pref('dice3d') === false);
+                this.render();
+                if (!this.modal.hidden) this.showMenu();
+            }],
+            // in a phone's browser; the Android app is already full screen, iPhone's Safari does not allow it
+            canFullscreen() ? [t(isFullscreen() ? 'ui.exitFullscreen' : 'ui.fullscreen'), () => {
+                this.hideModal();
+                toggleFullscreen();
+            }] : null,
+            [t('cmp.menu.code'), () => this.copyCode()],
+            CONTACT ? [t('cmp.bug'), () => this.reportBug()] : null,
+            [t('cmp.menu.exit'), () => this.exit()],
+        ].filter(Boolean);
+    }
+
+    showMenu() {
+        this.showModal(h('div', { class: 'opts' }, this.menuItems().map(([label, fn]) => h('button', { class: 'opt', onclick: fn }, label)),
+            h('button', { class: 'opt quiet', onclick: () => this.hideModal() }, t('cmp.close'))));
     }
 
     /** One step for the table; an attack by the computer rolls its dice first. */
@@ -188,9 +221,15 @@ export class CompanionView {
             this.steps.shift();
             this.render();
         };
+        /** The text with the computer's card and action in bold and in its side's colour. */
+        const marked = (text) => {
+            const i = step.played ? text.indexOf(step.played) : -1;
+            if (i < 0) return text;
+            return [text.slice(0, i), h('strong', { class: `played ${step.side}` }, step.played), text.slice(i + step.played.length)];
+        };
         const box = h('div', { class: `card-box step ${step.kind} ${step.side}` },
-            step.head ? h('div', { class: 'head' }, step.head) : null,
-            h('p', { class: 'big' }, step.text),
+            step.head ? h('div', { class: 'head' }, marked(step.head)) : null,
+            h('p', { class: 'big' }, marked(step.text)),
             step.lines?.length ? h('ul', {}, step.lines.map((l) => h('li', {}, l))) : null);
         const result = h('p', { class: `result ${step.hit ? 'hit' : 'miss'}` });
         const buttons = h('div', { class: 'buttons' },
@@ -215,7 +254,7 @@ export class CompanionView {
         sfx.dice();
         const tray = pref('dice3d') === false ? null : await diceTray();
         if (tray) {
-            const roll = tray.roll(step.dice.map((value) => ({ sides: 10, value, color: step.side })), { rect: this.mapEl.getBoundingClientRect() });
+            const roll = tray.roll(step.dice.map((value) => ({ sides: 10, value, color: step.side })), { rect: this.zoom.el.getBoundingClientRect() });
             if (await Promise.race([roll.then(() => false), tick(6000).then(() => true)])) tray.skip();
         } else await tick(400);
         (step.hit ? sfx.impact : () => sfx.miss(step.dice.length))();
@@ -345,18 +384,41 @@ export class CompanionView {
 
     // ------------------------------------------------------------------ the check and the code
 
+    /** What is on a tile, as text: its units and its markers. */
+    tileContents(tile, view) {
+        const units = Object.values(view.units).filter((u) => u.tile === tile).map((u) => `${unitName(u.id, this.me)}${u.suppressed ? ` (${t('cmp.map.suppressed')})` : ''}`);
+        const marks = [];
+        for (const [seat, side] of SIDES.entries()) {
+            const c = view.control[tile][side];
+            if (c) marks.push(t(`cmp.check.${c}`, { side: sideName(seat) }));
+            if (view.targets[seat] === tile) marks.push(t('cmp.check.target', { side: sideName(seat) }));
+        }
+        if (view.objectives[tile]) marks.push(t('cmp.check.objective', { n: view.objectives[tile] }));
+        return { units: units.join(', ') || t('cmp.check.none'), marks: marks.join(', ') || t('cmp.check.none') };
+    }
+
+    /** A long press on the map: what is on that tile. */
+    showTile(x, y) {
+        const tile = tileAtPoint(this.sc, x, y);
+        if (!tile) return;
+        const { units, marks } = this.tileContents(tile, this.shown);
+        this.showModal(h('div', { class: 'check' },
+            h('h3', {}, `${tile} · ${t('cmp.map.cover')} ${coverText(TILES[tile].cover)}`),
+            h('p', {}, h('b', {}, `${t('cmp.check.units')}: `), units),
+            h('p', {}, h('b', {}, `${t('cmp.check.markers')}: `), marks),
+            h('div', { class: 'buttons' }, h('button', { class: 'primary', onclick: () => this.hideModal() }, t('cmp.close')))));
+    }
+
+    /** The name of a map pick, for "tap again to confirm". */
+    labelOf(pick) {
+        return pick.startsWith('unit:') ? unitName(pick.slice(5), this.me) : pick.slice(pick.indexOf(':') + 1);
+    }
+
     showCheck() {
         const view = this.view();
         const rows = this.sc.tiles.map((tile) => {
-            const units = Object.values(view.units).filter((u) => u.tile === tile.id).map((u) => `${unitName(u.id, this.me)}${u.suppressed ? ` (${t('cmp.map.suppressed')})` : ''}`);
-            const marks = [];
-            for (const [seat, side] of SIDES.entries()) {
-                const c = view.control[tile.id][side];
-                if (c) marks.push(t(`cmp.check.${c}`, { side: sideName(seat) }));
-                if (view.targets[seat] === tile.id) marks.push(t('cmp.check.target', { side: sideName(seat) }));
-            }
-            if (view.objectives[tile.id]) marks.push(t('cmp.check.objective', { n: view.objectives[tile.id] }));
-            return h('tr', {}, h('td', {}, h('b', {}, tile.id)), h('td', {}, units.join(', ') || t('cmp.check.none')), h('td', {}, marks.join(', ') || t('cmp.check.none')));
+            const { units, marks } = this.tileContents(tile.id, view);
+            return h('tr', {}, h('td', {}, h('b', {}, tile.id)), h('td', {}, units), h('td', {}, marks));
         });
         const off = Object.values(view.units).filter((u) => !u.tile).map((u) => unitName(u.id, this.me));
         this.showModal(h('div', { class: 'check' },
@@ -379,6 +441,19 @@ export class CompanionView {
         }
     }
 
+    /** An email to report a bug, with the game's code: in the body, or by the clipboard when it is too long. */
+    async reportBug() {
+        const code = await encodeRecord(makeRecord(this.session, 'companion'));
+        const mail = bugMail(CONTACT, { code, app: appKind(), agent: navigator.userAgent });
+        if (mail.clipboard) {
+            try {
+                await navigator.clipboard.writeText(code);
+                this.toast(t('cmp.bug.copied'));
+            } catch {}
+        }
+        h('a', { href: mail.url }).click();
+    }
+
     toast(text) {
         const el = h('div', { class: 'toast' }, text);
         document.body.append(el);
@@ -388,9 +463,16 @@ export class CompanionView {
     showModal(content) {
         this.modal.replaceChildren(h('div', { class: 'modal-box' }, content));
         this.modal.hidden = false;
+        // a step of the page's history, so that Back closes it and does not leave the game
+        if (!history.state?.modal) history.pushState({ game: true, modal: true }, '');
     }
 
     hideModal() {
+        if (history.state?.modal) history.back(); // popstate closes it
+        else this.closeModal();
+    }
+
+    closeModal() {
         this.modal.hidden = true;
         this.modal.replaceChildren();
     }

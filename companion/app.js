@@ -12,6 +12,7 @@ import { cardName, sideName } from '../src/ui/text.js';
 import { drawMap } from './map.js';
 import { CompanionView, loadSaved } from './play.js';
 import { warmDice } from '../src/ui/combat.js';
+import { CONTACT, SOURCE, VERSION, bugMail, appKind } from './contact.js';
 
 const root = document.getElementById('app');
 const PREFS = 'unc-prefs';
@@ -115,7 +116,9 @@ function setupScreen() {
                         }
                     } }, t('cmp.setup.load'))), err)),
             info),
-        h('footer', { class: 'credits small muted' }, t('cmp.credits'))));
+        h('footer', { class: 'credits small muted' }, t('cmp.credits'),
+            h('p', {}, `Normandy Companion ${VERSION} · `, h('a', { href: SOURCE, target: '_blank', rel: 'noopener' }, t('cmp.source')),
+                CONTACT ? [' · ', h('a', { href: bugMail(CONTACT, { app: appKind(), agent: navigator.userAgent }).url }, t('cmp.bug'))] : null))));
 }
 
 // a game is a step of the page's history: Back returns to the start screen, with the game saved
@@ -128,12 +131,14 @@ function start(game) {
 
 function leave() {
     current = null;
-    if (history.state?.game) history.back();
+    if (history.state?.game) history.go(history.state.modal ? -2 : -1);
     setupScreen();
 }
 
 window.addEventListener('popstate', () => {
-    if (!current || history.state?.game) return;
+    if (!current) return;
+    if (!history.state?.modal) current.closeModal();
+    if (history.state?.game) return;
     current.dispose();
     current = null;
     setupScreen();

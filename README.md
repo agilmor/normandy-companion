@@ -11,7 +11,10 @@ game**. The app plays the other side; you play yours with your cards, tiles, cou
   (the tiles by their numbers, the cover, the objectives and the markers).
 - Scenarios 1 to 12 of the scenario book; set them up with your book. Spanish and English.
 
-## Play
+**Beta (0.1.0-beta).** Play it at https://plissken2013es.github.io/normandy-companion/, and tell us what goes wrong: open an
+[issue](https://github.com/plissken2013es/normandy-companion/issues) (with the game code from ☰ → Code, if you can) or use *Report a bug* in the app.
+
+## Play locally
 
 Open `index.html` through a local server, for example:
 
@@ -30,3 +33,13 @@ official and not endorsed by them. It includes none of the game's art, rulebook 
 ## Tests
 
     npm test
+
+## Contributing
+
+Issues and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+The code is under the [MIT license](LICENSE). It covers this code only: Undaunted: Normandy, its rules, art and
+texts belong to their owners. The 3D dice libraries and the sounds keep their own licences (`vendor/`,
+`assets/sounds/`).

@@ -1,8 +1,7 @@
 // Texts built from engine data: card and unit names, prompts, option labels, log lines and results.
 
 import { t, tr } from '../i18n/index.js';
-import { TYPES, UNITS, unitKind, unitType } from '../engine/data.js';
-import { hitChance } from '../ai/heuristicBot.js';
+import { TYPES, UNITS, hitChance, unitKind, unitType } from '../engine/data.js';
 
 const SIDES = ['us', 'de'];
 export const sideName = (seat) => t(`side.${SIDES[seat]}`);
@@ -55,6 +54,13 @@ export function optionLabel(req, o, viewer) {
 
 const KIND = { attack: 'act.attack', suppress: 'act.suppress', blast: 'act.blast' };
 
+/** Card names with repeats counted: "Niebla de guerra ×2, Fusilero A". */
+export function cardsText(types) {
+    const n = new Map();
+    for (const c of types) n.set(c, (n.get(c) ?? 0) + 1);
+    return [...n].map(([c, k]) => (k > 1 ? `${cardName(c)} ×${k}` : cardName(c))).join(', ');
+}
+
 export function logLine(e, viewer) {
     const side = e.seat != null ? sideName(e.seat) : '';
     const p = { ...e, side };
@@ -71,7 +77,7 @@ export function logLine(e, viewer) {
         case 'attack':
             return t('log.attack', { ...p, kind: t(KIND[e.kind]), dice: e.dice ? e.dice.join(' ') : t('log.physicalDice'), result: t(e.hit ? 'log.hit' : 'log.miss') });
         case 'leftover':
-            return t('log.leftover', { ...p, cards: e.cards.map(cardName).join(', ') });
+            return t('log.leftover', { ...p, cards: cardsText(e.cards) });
         case 'casualty':
             return t('log.casualty', { ...p, from: t(`log.from.${e.from}`) });
         case 'gameOver':

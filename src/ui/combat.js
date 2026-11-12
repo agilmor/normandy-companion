@@ -35,6 +35,7 @@ export class Playback {
     constructor() {
         this.all = false; // "skip": the rest goes by at once
         this.wake = null;
+        this.started = performance.now(); // a click from before this moment is the one that started it, not a tap
     }
 
     wait(ms) {

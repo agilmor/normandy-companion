@@ -3,9 +3,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { SCENARIOS } from '../src/engine/data.js';
-import { Session } from '../src/engine/session.js';
+import { Session, decodeRecord } from '../src/engine/session.js';
 import { randomBot } from '../src/ai/randomBot.js';
-import { heuristicBot } from '../src/ai/heuristicBot.js';
+import { context, heuristicBot, scorePlay } from '../src/ai/heuristicBot.js';
 import { boardAt, guideSteps } from '../companion/guide.js';
 
 const board = (v) => ({ units: v.units, control: v.control, targets: v.targets, objectives: v.objectives });
@@ -41,6 +41,23 @@ test('companion: every step has a text, and the board rebuilt from the log ends 
         assert.ok(s.state.result, `scenario ${sc.id} ends`);
         assert.ok(kinds.has('table'), `scenario ${sc.id}: steps for the table`);
     }
+});
+
+test('bot: a Scout that can mark a free objective does that rather than fire (the user\'s game of scenario 12)', async () => {
+    const rec = await decodeRecord('UNN1.bZBBb4JAEIX_yzvPBhalyN4gTU8mbeDQQ9PDum4iFXcNC9ZW_O8NIFErWQJf5r1h38wJBwhOWDVFuYaAsru9NIU1IDhdN3uIE5zSRlaFheBBV9adc6Pj36-VrUDYyWNmG7N2EHEcxwRlTV3ZMmtKDQFjq5006x8Q9LHWlZElhE9Y2fq5UJ3jUFR1I0ucCdK4b105iA-sirV4eX0H9ZQvExCkqkW-TIUPQi23WmTpHfV6MshFqcUiHSka5ey_3Pek1yIPkhHDqaZBH5Ikgk84-rYh9EjDIJd4wQXf8tv2sZo9ZBnvuk6d3NHlX1NLeTTm6eRNi_uk9yu_NU4uMrpZfjdSY4paNK5L8klQG622EJi1fsvbIPKjMJjHT2HLvOGEqceDxGPePOmY3Zwo7Z7-O-scrOU0o4jmnAKPc_JpTrMF8VYx5phyjDnFFBuJMda_GGupxfkP');
+    const s = new Session(rec.setup, rec.answers.slice(0, rec.answers.lastIndexOf('act:SA:1')));
+    assert.deepEqual([s.pending.seat, s.pending.kind], [1, 'play']);
+    const cx = context(s.view(1), 1);
+    const score = (id) => scorePlay(cx, s.pending.options.find((o) => o.id === id));
+    assert.ok(score('act:SA:0') > score('act:SA:1'), 'scout (5B, 1B) over attack');
+});
+
+test('companion: the computer\'s card and action can be marked in the text of its steps', () => {
+    let marked = 0;
+    play(1, 1, 'virtual', (entries, before, after) => {
+        for (const x of guideSteps(entries, 1, before, after)) if (x.played && `${x.head} ${x.text}`.includes(x.played)) marked++;
+    });
+    assert.ok(marked > 0);
 });
 
 test('companion: the computer\'s moves make one step each, with the tiles it scouted after it', () => {
@@ -91,4 +108,15 @@ test('companion: a player who only follows the steps keeps the same piles as the
         });
         assert.ok(s.state.result);
     }
+});
+
+test('a bug report is a mailto: link with the game code, or the code by the clipboard when too long', async () => {
+    const { bugMail } = await import('../companion/contact.js');
+    const short = bugMail('a@b.c', { code: 'UNN1.abc', app: 'android' });
+    assert.ok(short.url.startsWith('mailto:a@b.c?subject='));
+    assert.ok(decodeURIComponent(short.url).includes('UNN1.abc'));
+    assert.equal(short.clipboard, false);
+    const long = bugMail('a@b.c', { code: `UNN1.${'x'.repeat(3000)}` });
+    assert.equal(long.clipboard, true);
+    assert.ok(long.url.length <= 1800 && !long.url.includes('xxxx'));
 });
