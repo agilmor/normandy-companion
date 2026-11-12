@@ -7,7 +7,7 @@ import { t, getLang } from '../src/i18n/index.js';
 /** Where the reports go: a public address made only for this. */
 export const CONTACT = 'plissken2013es@hotmail.com';
 /** The version, shown in the credits and sent with each report; tools/build-companion.mjs copies it to package.json. */
-export const VERSION = '0.1.0-beta';
+export const VERSION = '0.2.0-beta';
 /** The public repository: the code, its issues and pull requests. */
 export const SOURCE = 'https://github.com/plissken2013es/normandy-companion';
 

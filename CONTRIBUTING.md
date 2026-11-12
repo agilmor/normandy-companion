@@ -12,7 +12,9 @@ happened, what you expected, and your browser or phone.
 
 - Plain JavaScript modules, no build and no dependencies. Run `npm test` before sending.
 - The rules engine (`src/engine/`) has no DOM, no timers and no `Math.random`; a change to a rule needs a test.
-- Every text on screen goes through `t()`, in Spanish and English (`src/i18n/`).
+- Every text on screen goes through `t()`, in Spanish and English (`src/i18n/`). New texts may stay in English in
+  the other languages (`src/i18n/lang/`): they show in English until a translator fills them in.
+- Translations: see [Translating the companion](README.md#translating-the-companion).
 - Nothing of the game itself: no photos or scans of its tiles, cards or counters, and no texts of its rulebook or
   scenario book.
 

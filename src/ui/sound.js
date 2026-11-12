@@ -25,6 +25,13 @@ function audio() {
     return ctx;
 }
 
+// in the background (the Android apps after Home or Back, another tab) the audio stops; the next sound resumes it
+if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden && ctx?.state === 'running') ctx.suspend();
+    });
+}
+
 /** 1..n */
 function range(n) { return Array.from({ length: n }, (_, i) => i + 1); }
 

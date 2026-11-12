@@ -3,7 +3,7 @@
 // (play.js). Credits to the designers and the publisher; nothing of the game's art, rules or scenario texts.
 
 import { h } from '../src/ui/dom.js';
-import { t, tr, setLang, getLang } from '../src/i18n/index.js';
+import { t, tr, setLang, getLang, pickLang, LANGS, LANG_NAMES, EXTRA_LANGS } from '../src/i18n/index.js';
 import { SCENARIOS } from '../src/engine/data.js';
 import { createState, normalizeSetup } from '../src/engine/state.js';
 import { view } from '../src/engine/view.js';
@@ -32,7 +32,7 @@ function savePrefs(p) {
     } catch {}
 }
 
-setLang(new URLSearchParams(location.search).get('lang') ?? prefs().lang ?? (navigator.language?.startsWith('es') ? 'es' : 'en'));
+setLang(new URLSearchParams(location.search).get('lang') ?? prefs().lang ?? pickLang(navigator.languages ?? [navigator.language]));
 document.documentElement.lang = getLang();
 
 /** "Riflemen A ×4, Scout A" from { RA: 4, SA: 1 }. */
@@ -89,7 +89,8 @@ function setupScreen() {
     showInfo();
     root.replaceChildren(h('div', { class: 'setup' },
         h('header', { class: 'bar' }, h('strong', {}, t('cmp.title')), h('span', { class: 'muted sub' }, t('cmp.subtitle')), h('span', { class: 'grow' }),
-            h('button', { onclick: () => { const l = getLang() === 'es' ? 'en' : 'es'; savePrefs({ lang: l }); setLang(l); document.documentElement.lang = l; setupScreen(); } }, t('cmp.lang'))),
+            h('select', { class: 'lang', 'aria-label': 'Language', onchange: (e) => { const l = e.target.value; savePrefs({ lang: l }); setLang(l); document.documentElement.lang = l; setupScreen(); } },
+                LANGS.map((l) => h('option', { value: l, selected: l === getLang() }, LANG_NAMES[l])))),
         h('p', { class: 'notice' }, t('cmp.notice')),
         h('div', { class: 'setup-body' },
             h('div', { class: 'form' },
@@ -117,6 +118,7 @@ function setupScreen() {
                     } }, t('cmp.setup.load'))), err)),
             info),
         h('footer', { class: 'credits small muted' }, t('cmp.credits'),
+            EXTRA_LANGS.map((l) => h('p', { lang: l.code }, l.credit)),
             h('p', {}, `Normandy Companion ${VERSION} · `, h('a', { href: SOURCE, target: '_blank', rel: 'noopener' }, t('cmp.source')),
                 CONTACT ? [' · ', h('a', { href: bugMail(CONTACT, { app: appKind(), agent: navigator.userAgent }).url }, t('cmp.bug'))] : null))));
 }
