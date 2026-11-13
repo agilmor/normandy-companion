@@ -44,8 +44,11 @@ input, select, textarea { background: #14160f; color: var(--ink); border: 1px so
 .bar .score.de { background: color-mix(in srgb, var(--de) 55%, transparent); }
 .bar .ini.us { color: var(--us-l); }
 .bar .ini.de { color: var(--de-l); }
-.bar .extras { display: flex; flex-wrap: wrap; gap: 8px; }
-.bar .menu-btn { display: none; font-size: 1.1em; }
+/* who holds the initiative: a dot by its side's score; its text on hover, or beside it after a tap */
+.bar .ini-dot { width: 11px; height: 11px; border-radius: 50%; flex: none; cursor: pointer; }
+.bar .ini-dot.us { background: var(--us-l); }
+.bar .ini-dot.de { background: var(--de-l); }
+.bar .menu-btn { font-size: 1.1em; }
 
 /* start screen */
 .notice { margin: 14px 16px 0; padding: 10px 14px; border-left: 4px solid var(--accent); background: var(--panel); border-radius: 6px; line-height: 1.45; }
@@ -83,6 +86,8 @@ input, select, textarea { background: #14160f; color: var(--ink); border: 1px so
 .card-box .result.hit { color: #8fd69d; }
 .card-box .result.miss { color: #e79a87; }
 .buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+/* a step's Done buttons wait, hidden, for its dice (its display: flex would show them anyway) */
+.buttons[hidden] { display: none; }
 .opts { display: flex; flex-direction: column; gap: 6px; }
 .opts.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
 .opts.two { display: grid; grid-template-columns: 1fr 1fr; }
@@ -95,10 +100,17 @@ input, select, textarea { background: #14160f; color: var(--ink); border: 1px so
 .roll.us .need { color: var(--us-l); }
 .info { background: var(--panel2); border-radius: 8px; padding: 6px 10px; }
 .info summary { cursor: pointer; font-size: 0.92em; }
-.info.log ol { padding-left: 18px; margin: 6px 0; font-size: 0.85em; max-height: 280px; overflow-y: auto; }
+.info.log ol { padding-left: 0px; margin: 0px 0; font-size: 0.85em; max-height: 280px; overflow-y: auto; list-style-position: inside; }
 .info.log li.round { font-weight: 600; margin-top: 4px; list-style: none; }
 .deck-panel .piles { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 0.88em; margin: 6px 0; }
 .deck-panel .piles b { white-space: nowrap; }
+/* the cards panel's 'compared' and 'detailed' views (cards.js): both players side by side, pile by pile */
+.cards-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 10px; font-size: 0.88em; margin: 6px 0; text-align: center; }
+.cards-grid .cards-head { font-weight: 600; }
+.cards-grid .cards-head div { font-weight: 400; }
+.cards-grid .cards-title { grid-column: 1 / -1; font-weight: 600; margin-top: 4px; cursor: pointer; user-select: none; }
+.cards-grid .right { border-left: 1px solid var(--line); padding-left: 10px; }
+.cards-grid .cards-hidden { margin-top: 3px; font-size: 0.95em; }
 
 .modal { position: fixed; inset: 0; background: rgb(0 0 0 / 0.55); display: flex; align-items: center; justify-content: center; z-index: 20; padding: 16px; }
 .modal[hidden] { display: none; }
@@ -172,7 +184,6 @@ input, select, textarea { background: #14160f; color: var(--ink); border: 1px so
     .bar { gap: 6px 10px; padding: 6px 10px; font-size: 0.9em; }
     .bar button { padding: 6px 8px; }
     .bar .extras { display: none; }
-    .bar .menu-btn { display: inline-block; }
 }
 
 /* phone on its side: the map beside the panel, as on a big screen, and a bar of one line */
@@ -182,6 +193,5 @@ input, select, textarea { background: #14160f; color: var(--ink); border: 1px so
     .bar strong, .bar .ini { display: none; }
     .bar button { padding: 4px 8px; }
     .bar .extras { display: none; }
-    .bar .menu-btn { display: inline-block; }
     .panel { padding: 8px; }
 }

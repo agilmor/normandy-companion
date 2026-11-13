@@ -1,4 +1,4 @@
-// Scenario index: the 12 scenarios of the scenario book (docs/02 §2.3).
+// Scenario index: the scenarios of the scenario book.
 import s01 from './s01.json' with { type: 'json' };
 import s02 from './s02.json' with { type: 'json' };
 import s03 from './s03.json' with { type: 'json' };

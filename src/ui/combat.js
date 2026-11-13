@@ -69,7 +69,7 @@ const fullName = (uid) => `${unitName(uid)} (${sideName(seatOf(uid))})`;
 
 /** Is a beat worth stopping for? Attacks and bids always; moves, spawns and rallies only of a bot's counters. */
 export function worthShowing(beat, isHuman) {
-    if (beat.kind === 'attack' || beat.kind === 'bids') return true;
+    if (beat.kind === 'attack' || beat.kind === 'bids' || beat.kind === 'paradrop') return true;
     if (beat.kind === 'stuck') return isHuman(beat.seat);
     return ['move', 'spawn', 'rally'].includes(beat.kind) && !isHuman(seatOf(beat.unit));
 }
@@ -97,6 +97,20 @@ export function attackInfo(entry, after, viewer) {
         result: entry.hit ? t('fx.hit') : t('fx.miss'),
         badge: { unit: entry.target, hit: entry.hit, text: t(entry.hit ? (entry.kind === 'suppress' ? 'fx.badge.suppressed' : 'fx.badge.hit') : 'fx.badge.miss') },
         then: consequences.map((e) => logLine(e, viewer)),
+    };
+}
+
+/** The texts of a paradrop beat (scenario 16): every roll but the last had no tile and was rolled again. */
+export function paradropInfo(beat) {
+    const v = (d) => d || 10; // the 0 counts as 10 ([D-39])
+    const [a, b] = beat.rolls.at(-1).map(v);
+    return {
+        side: SIDES[seatOf(beat.unit)],
+        title: t('fx.paradrop', { unit: fullName(beat.unit) }),
+        rule: t('fx.paradropRule'),
+        again: beat.rolls.slice(0, -1).map(([x, y]) => t('fx.paradropAgain', { a: v(x), b: v(y), sum: v(x) + v(y) })),
+        dice: [a, b].map((d) => ({ d, hit: true })),
+        result: t('fx.paradropLands', { sum: a + b, tile: beat.tile }),
     };
 }
 

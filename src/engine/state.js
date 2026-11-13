@@ -2,7 +2,7 @@
 // Seat 0 is always the US, seat 1 the Germans (docs/02 §2.2).
 
 import { GameEnd, log, note } from './ask.js';
-import { seedFrom, shuffle } from './rng.js';
+import { randomInt, seedFrom, shuffle } from './rng.js';
 import { SIDES, TYPES, scenarioById, typeOf, unitOfCard, unitType } from './data.js';
 import { boardOf } from './board.js';
 
@@ -83,6 +83,9 @@ export function createState(setup) {
             g.units[id] = { id, seat, type, tile: start.units[side][type] ?? null, suppressed: false };
         }
     });
+    // scenario 16: these counters are placed by paradrop at setup (docs/01 §8)
+    const drop = sc.paradrop;
+    for (const type of drop?.start ?? []) land(g, `${drop.side}:${type}`, paradropRoll(g));
     return g;
 }
 
@@ -169,26 +172,85 @@ export const unitsOf = (g, seat) => Object.values(g.units).filter((u) => u.seat 
 export const onBoard = (g, seat) => unitsOf(g, seat).filter((u) => u.tile);
 export const enemiesOn = (g, seat, tile) => onBoard(g, 1 - seat).filter((u) => u.tile === tile);
 
-/** The tile of the spawn marker that brings in a unit type: its own type, its squad, or "all" ([D-29]). */
+/**
+ * The tile of the spawn marker that brings in a unit type: its own type, its squad, or "all" ([D-29]). null: none
+ * brings it in, so it cannot come back once off the board ([D-40]), or it enters by paradrop (scenario 16).
+ */
 export function spawnTile(g, seat, type) {
+    if (paradropSide(sc(g)) === sideOf(seat)) return null; // lands where the dice say
     const spawns = sc(g).spawns[sideOf(seat)];
     const name = type === 'SN' ? 'sniper' : type === 'MO' ? 'mortar' : null;
     const hit = spawns.find((s) => (name ? s.who.includes(name) : s.who.includes(type.at(-1)))) ?? spawns.find((s) => s.who.includes('all'));
-    if (!hit) throw new Error(`no spawn for ${sideOf(seat)} ${type}`);
-    return hit.tile;
+    return hit?.tile ?? null;
 }
 
-/** Where a unit's counter is, or where it would enter the board. */
+/** Where a unit's counter is, or where it would enter the board (null: by paradrop, unknown until rolled). */
 export const positionOf = (g, uid) => g.units[uid].tile ?? spawnTile(g, g.units[uid].seat, g.units[uid].type);
 
 /** Places a unit that is off the board on its spawn tile, ready side up ([D-8]). */
 export function spawn(g, uid) {
     const u = g.units[uid];
     if (u.tile) return false;
-    u.tile = spawnTile(g, u.seat, u.type);
+    if (paradropSide(sc(g)) === sideOf(u.seat)) {
+        land(g, uid, paradropRoll(g));
+        return true;
+    }
+    const tile = spawnTile(g, u.seat, u.type);
+    if (!tile) return false; // [D-40]
+    u.tile = tile;
     u.suppressed = false;
     log(g, 'spawn', { seat: u.seat, unit: uid, tile: u.tile });
     return true;
+}
+
+// ------------------------------------------------------------------ paradrop (scenario 16, docs/01 §8, [D-39])
+
+/** The side that enters by paradrop instead of spawn markers, or null. */
+export const paradropSide = (scn) => scn.paradrop?.side ?? null;
+
+/** Tile ids by their number (`9A` → 9). */
+const tilesByNumber = (scn) => new Map(scn.tiles.map((t) => [parseInt(t.id, 10), t.id]));
+
+/** What a die counts for in a paradrop: the 0 is a 10, as in an attack ([D-39]). */
+export const dropValue = (d) => d || 10;
+
+/** The dice of a paradrop until their sum (2–20) is the number of a tile on the board ([D-39]), and that tile. */
+export function paradropRoll(g) {
+    const byNum = tilesByNumber(sc(g));
+    const rolls = [];
+    for (;;) {
+        const dice = [randomInt(g, 10), randomInt(g, 10)];
+        rolls.push(dice);
+        const tile = byNum.get(dropValue(dice[0]) + dropValue(dice[1]));
+        if (tile) return { rolls, tile };
+    }
+}
+
+/** The chance of landing on each tile, for the bots: [{ tile, p }]. */
+export function paradropOdds(scn) {
+    const byNum = tilesByNumber(scn);
+    const n = new Map();
+    let all = 0;
+    for (let a = 1; a <= 10; a++) {
+        for (let b = 1; b <= 10; b++) {
+            const tile = byNum.get(a + b);
+            if (!tile) continue;
+            n.set(tile, (n.get(tile) ?? 0) + 1);
+            all++;
+        }
+    }
+    return [...n].map(([tile, k]) => ({ tile, p: k / all }));
+}
+
+/** Places a paradropped counter, ready side up, with its side's scouted marker if it has none there (no Fog of War). */
+export function land(g, uid, drop) {
+    const u = g.units[uid];
+    const side = sideOf(u.seat);
+    u.tile = drop.tile;
+    u.suppressed = false;
+    const marked = !g.control[drop.tile][side];
+    if (marked) g.control[drop.tile][side] = 'scouted';
+    log(g, 'paradrop', { seat: u.seat, unit: uid, tile: drop.tile, rolls: drop.rolls, marked });
 }
 
 /** Moves a counter; a moving Mortar loses its target marker. */

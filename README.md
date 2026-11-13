@@ -12,7 +12,7 @@ game**. The app plays the other side; you play yours with your cards, tiles, cou
 - Scenarios 1 to 12 of the scenario book; set them up with your book. Spanish and English, and more languages are
   welcome: see [Translating the companion](#translating-the-companion).
 
-**Beta (0.2.0-beta).** Play it at https://plissken2013es.github.io/normandy-companion/, and tell us what goes wrong: open an
+**Beta (0.3.0-beta).** Play it at https://plissken2013es.github.io/normandy-companion/, and tell us what goes wrong: open an
 [issue](https://github.com/plissken2013es/normandy-companion/issues) (with the game code from ☰ → Code, if you can) or use *Report a bug* in the app.
 
 ## Play locally

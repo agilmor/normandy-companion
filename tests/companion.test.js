@@ -66,7 +66,7 @@ test('companion: the computer\'s moves make one step each, with the tiles it sco
         const steps = guideSteps(entries, 1, before, after);
         const moves = entries.filter((e) => e.k === 'move' && e.seat === 0);
         const units = new Set(moves.map((e) => e.unit));
-        const moveSteps = steps.filter((x) => x.arrow?.kind === 'move');
+        const moveSteps = steps.filter((x) => x.arrow?.[0]?.kind === 'move');
         assert.ok(moveSteps.length <= moves.length && moveSteps.length >= Math.min(units.size, moves.length ? 1 : 0));
         seen += moveSteps.length;
     });

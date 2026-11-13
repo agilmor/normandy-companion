@@ -8,8 +8,9 @@ import { SCENARIOS } from '../src/engine/data.js';
 import { createState, normalizeSetup } from '../src/engine/state.js';
 import { view } from '../src/engine/view.js';
 import { decodeRecord, replayRecord } from '../src/engine/session.js';
-import { cardName, sideName } from '../src/ui/text.js';
+import { sideName } from '../src/ui/text.js';
 import { drawMap } from './map.js';
+import { CARD_VIEWS, cardList } from './cards.js';
 import { CompanionView, loadSaved } from './play.js';
 import { warmDice } from '../src/ui/combat.js';
 import { CONTACT, SOURCE, VERSION, bugMail, appKind } from './contact.js';
@@ -36,7 +37,6 @@ setLang(new URLSearchParams(location.search).get('lang') ?? prefs().lang ?? pick
 document.documentElement.lang = getLang();
 
 /** "Riflemen A ×4, Scout A" from { RA: 4, SA: 1 }. */
-const cardList = (counts) => Object.entries(counts).map(([type, n]) => `${cardName(type)}${n > 1 ? ` ×${n}` : ''}`).join(', ');
 
 /** The objectives, in our own words, from the win conditions. */
 export function goals(sc, seat) {
@@ -51,6 +51,7 @@ function setupScreen() {
     let botDice = p.botDice ?? 'virtual';
     let controlRule = p.controlRule ?? 'normandy';
     let terrain = p.terrain !== false;
+    const cardsView = CARD_VIEWS.includes(p.cards) ? p.cards : 'player';
     const info = h('div', { class: 'scen-info' });
     const showInfo = () => {
         const sc = SCENARIOS.find((x) => x.id === scenario);
@@ -78,6 +79,9 @@ function setupScreen() {
         ['virtual', 'physical'].map((v) => h('option', { value: v, selected: v === botDice }, t(`cmp.setup.botDice.${v}`))));
     const mapSel = h('select', { onchange: (e) => { terrain = e.target.value === 'terrain'; savePrefs({ terrain }); showInfo(); } },
         ['terrain', 'diagram'].map((v) => h('option', { value: v, selected: (v === 'terrain') === terrain }, t(`cmp.setup.map.${v}`))));
+    // the cards panel during the game (cards.js; also in ☰)
+    const cardsSel = h('select', { onchange: (e) => savePrefs({ cards: e.target.value }) },
+        CARD_VIEWS.map((v) => h('option', { value: v, selected: v === cardsView }, t(`cmp.cards.view.${v}`))));
     const ruleHelp = h('span', { class: 'small muted' });
     const showRule = () => (ruleHelp.textContent = t(`setup.controlRule.${controlRule}.help`));
     const rule = h('select', { onchange: (e) => { controlRule = e.target.value; showRule(); } },
@@ -99,6 +103,7 @@ function setupScreen() {
                 h('label', {}, t('cmp.setup.botDice'), dice),
                 h('label', {}, t('setup.controlRule'), rule, ruleHelp),
                 h('label', {}, t('cmp.setup.map'), mapSel),
+                h('label', {}, t('cmp.setup.cards'), cardsSel),
                 h('button', { class: 'primary', onclick: () => {
                     savePrefs({ scenario, side, botDice, controlRule });
                     start({ setup: { scenario, seed: Math.random().toString(36).slice(2, 10), controlRule, external: side, botDice } });

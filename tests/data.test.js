@@ -35,17 +35,19 @@ for (const sc of SCENARIOS) {
             }
             if (sc.win[side].points) assert.ok(Object.values(sc.objectives).reduce((a, b) => a + b, 0) >= sc.win[side].points);
         }
-        // every unit in play has exactly one spawn marker that brings it in ([D-29])
+        // every unit in play has exactly one spawn marker that brings it in ([D-29]); without one, it starts on the
+        // board and cannot come back once it leaves ([D-40]: US Squad A in s14, German Gunners C in s16), or its
+        // side enters by paradrop (s16)
         const g = createState(normalizeSetup({ scenario: sc.id }));
         for (const u of Object.values(g.units)) {
             const side = u.id.slice(0, 2);
             const name = u.type === 'SN' ? 'sniper' : u.type === 'MO' ? 'mortar' : u.type.at(-1);
             const exact = sc.spawns[side].filter((s) => s.who.includes(name));
             assert.ok(exact.length <= 1, `${u.id}: one spawn`);
-            assert.ok(spawnTile(g, u.seat, u.type));
+            if (!spawnTile(g, u.seat, u.type)) assert.ok(u.tile || sc.paradrop?.side === side, `${u.id}: no spawn, so on the board`);
         }
         // both sides start with Riflemen on the board
-        for (const side of ['us', 'de']) assert.ok(Object.keys(sc.units[side]).some((t) => t[0] === 'R'));
+        for (const side of ['us', 'de']) assert.ok(Object.values(g.units).some((u) => u.id.startsWith(side) && u.type[0] === 'R' && u.tile));
     });
 }
 

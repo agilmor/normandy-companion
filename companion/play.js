@@ -13,14 +13,14 @@ import { CONTACT, bugMail, appKind } from './contact.js';
 import { withoutRoundLimit } from '../src/engine/state.js';
 import { TILES, hitChance, scenarioById, unitType } from '../src/engine/data.js';
 import { computerBot } from '../src/ai/computerBot.js';
-import { actionName, cardName, logLine, resultText, sideName, unitName } from '../src/ui/text.js';
+import { actionName, cardLabel, cardName, logLine, resultText, sideName, unitName } from '../src/ui/text.js';
 import { diceTray } from '../src/ui/combat.js';
 import { sfx, loadSamples } from '../src/ui/sound.js';
 import { BoardZoom } from '../src/ui/zoom.js';
 import { canFullscreen, isFullscreen, toggleFullscreen } from '../src/ui/touch.js';
 import { coverText, drawMap, tileAtPoint } from './map.js';
 import { boardAt, guideSteps } from './guide.js';
-import { deckPanel } from './cards.js';
+import { CARD_VIEWS, cardPanels } from './cards.js';
 
 export const SAVE = 'unc-save';
 const SIDES = ['us', 'de'];
@@ -64,6 +64,8 @@ export class CompanionView {
         this.sc = scenarioById(this.session.setup.scenario);
         this.bot = computerBot(this.sc.id, this.botSeat, `${this.session.setup.seed}:bot`);
         this.marks = game.marks ?? []; // answers.length before each of the player's answers (undo)
+        this.panelOpen = {}; // the right panel's <details> are rebuilt every render; this keeps their open/closed state
+        this.folded = {}; // the folded sections of the cards panel ('compared' and 'detailed' views), here and in the check
         this.steps = [];
         this.sel = null; // the card chosen in a "play" decision, before its action
         this.busy = false;
@@ -77,6 +79,8 @@ export class CompanionView {
         // leaving full screen with Back or Esc changes the menu's label too
         this.onFullscreen = () => { if (!this.disposed) this.renderTop(this.view()); };
         for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(ev, this.onFullscreen);
+        this.onKeydown = (e) => { if (e.key === 'Escape' && !this.modal.hidden) this.hideModal(); };
+        document.addEventListener('keydown', this.onKeydown);
         // a new game starts with the steps of its first round (draw your cards); a saved one where it was
         if (!game.answers?.length) this.steps = this.stepsOf(this.session.state.log, this.view());
         this.runBot(0, null);
@@ -85,6 +89,7 @@ export class CompanionView {
     dispose() {
         this.disposed = true;
         for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) document.removeEventListener(ev, this.onFullscreen);
+        document.removeEventListener('keydown', this.onKeydown);
     }
 
     view() {
@@ -119,16 +124,22 @@ export class CompanionView {
         }
         this.busy = false;
         const entries = this.session.state.log.slice(logStart);
-        if (logStart > 0 || before) this.steps.push(...this.stepsOf(entries, before));
+        if (logStart > 0 || before) this.steps.push(...this.stepsOf(entries, before, logStart));
         this.save();
         this.render();
     }
 
-    /** The steps of these log entries, each with the board as it stands after it. */
-    stepsOf(entries, before) {
+    /**
+     * The steps of these log entries, each with the board — and the Log panel's entries — as they stand after it, so
+     * neither gets ahead of the "Done" cards the player is clicking through. `logStart` bounds the log *before*
+     * this batch: `before.log` is a live reference into the engine's own array (view() never copies it), already
+     * grown by the time this runs, so the "so far" log for each step is built from a stable slice instead.
+     */
+    stepsOf(entries, before, logStart = 0) {
         const base = before ?? this.view();
+        const prior = this.session.state.log.slice(0, logStart);
         return guideSteps(entries, this.me, before, this.view())
-            .map((step) => ({ ...step, board: boardAt(base, entries, step.at ?? entries.length - 1) }));
+            .map((step) => ({ ...step, board: boardAt(base, entries, step.at ?? entries.length - 1), log: prior.concat(entries.slice(0, (step.at ?? entries.length - 1) + 1)) }));
     }
 
     undo() {
@@ -154,13 +165,13 @@ export class CompanionView {
         const step = this.steps[0];
         const req = !step && !this.busy && !this.session.over ? this.session.pending : null;
         const picks = new Map();
-        let arrow = null, focus = {};
+        let arrow = [], focus = {};
         if (step) {
             focus = step.focus ?? {};
-            arrow = step.arrow ?? null;
+            arrow = step.arrow ?? [];
         } else if (req) {
             this.picksFor(req, picks);
-            if (req.kind === 'roll') arrow = req.attack === 'blast' ? null : { from: req.unit, to: req.target, kind: 'attack', side: SIDES[req.attacker] };
+            if (req.kind === 'roll') arrow = req.attack === 'blast' ? [] : [{ from: req.unit, to: req.target, kind: 'attack', side: SIDES[req.attacker] }];
             if (req.kind === 'roll' || req.kind === 'casualty') focus = { unit: req.target ?? req.unit };
             if (req.kind === 'move') focus = { unit: req.unit };
         }
@@ -168,7 +179,28 @@ export class CompanionView {
         this.zoom.show(drawMap(this.shown, { picks, onPick: (id) => this.pick(id), viewer: this.me, focus, arrow, terrain: pref('terrain') !== false }));
         const main = step ? this.stepCard(step) : this.busy ? h('div', { class: 'card-box thinking' }, t('cmp.thinking'))
             : this.session.over ? this.endCard() : req ? this.askCard(req, view) : null;
-        this.panel.replaceChildren(main ?? '', deckPanel(view, this.me), this.botPanel(view), this.logPanel(view));
+        const cardsView = this.cardsView();
+        const keys = cardsView === 'player' ? ['deck', 'bot'] : ['cards'];
+        const cards = cardPanels(cardsView, view, this.me, this.botSeat, { fold: this.fold(() => this.render()) });
+        this.panel.replaceChildren(main ?? '', ...cards.map((el, i) => this.openPanel(keys[i], el)),
+            this.openPanel('log', step ? this.logPanel(view, step.log) : this.logPanel(view)));
+    }
+
+    /** The player's choice of cards panel (the start screen and ☰): one of CARD_VIEWS, 'player' by default. */
+    cardsView() {
+        return CARD_VIEWS.includes(pref('cards')) ? pref('cards') : 'player';
+    }
+
+    /** The folded sections of the cards panel, and how to fold one and draw it again. */
+    fold(redraw) {
+        return { collapsed: this.folded, toggle: (key) => { this.folded[key] = !this.folded[key]; redraw(); } };
+    }
+
+    /** `el` (a fresh <details>, rebuilt every render) opens as `key` was last left, and keeps that updated as the player toggles it. */
+    openPanel(key, el) {
+        el.open = this.panelOpen[key] ?? el.open;
+        el.addEventListener('toggle', () => { this.panelOpen[key] = el.open; });
+        return el;
     }
 
     renderTop(view) {
@@ -178,23 +210,37 @@ export class CompanionView {
             return h('span', { class: `score ${side}` }, win.points ? t('cmp.score.points', { side: who, n: pointsOf(view, side), need: win.points })
                 : t('cmp.score.pin', { side: who, n: riflemenOn(view, 1 - seat) }));
         });
+        // the initiative: a dot at the outer edge of the side that holds it (left of US, right of Germany); its text
+        // shows on hover, or next to it after a tap (PR #1 of the public repository, docs/02 §7.9)
+        const ini = t('cmp.initiative', { side: sideName(view.initiative) });
+        const dot = [
+            h('span', { class: `ini-dot ${SIDES[view.initiative]}`, title: ini, role: 'img', 'aria-label': ini, onclick: () => { this.iniText = !this.iniText; this.renderTop(view); } }),
+            this.iniText ? h('span', { class: `ini ${SIDES[view.initiative]}` }, ini) : null,
+        ].filter(Boolean);
+        const scores = view.initiative === 0 ? [...dot, ...score] : [...score, ...dot.reverse()];
+        // beside Undo, only the check of the table stays in sight (a wide screen); everything else is behind ☰
         this.top.replaceChildren(
             h('strong', {}, `${this.sc.id}. ${tr(this.sc.title)}`),
             h('span', { class: 'muted' }, t('cmp.round', { n: Math.max(1, view.round) })),
-            h('span', { class: `ini ${SIDES[view.initiative]}` }, t('cmp.initiative', { side: sideName(view.initiative) })),
-            ...score,
+            ...scores,
             h('span', { class: 'grow' }),
+            h('button', { class: 'extras', onclick: () => this.showCheck() }, t('cmp.menu.check')),
             h('button', { onclick: () => this.undo(), disabled: this.busy || !this.marks.length }, `↶ ${t('cmp.menu.undo')}`),
-            h('span', { class: 'extras' }, this.menuItems().map(([label, fn]) => h('button', { onclick: fn }, label))),
             h('button', { class: 'menu-btn', title: t('cmp.menu'), onclick: () => this.showMenu() }, '☰'));
     }
 
-    /** What the bar offers beside Undo; on a phone it goes behind ☰. */
+    /** What ☰ offers. */
     menuItems() {
         return [
             [t('cmp.menu.check'), () => this.showCheck()],
             [t(pref('dice3d') === false ? 'ui.diceOff' : 'ui.diceOn'), () => {
                 setPref('dice3d', pref('dice3d') === false);
+                this.render();
+                if (!this.modal.hidden) this.showMenu();
+            }],
+            // the cards panel: each tap moves to the next view (cards.js, CARD_VIEWS)
+            [t('cmp.menu.cards', { view: t(`cmp.cards.view.${this.cardsView()}`) }), () => {
+                setPref('cards', CARD_VIEWS[(CARD_VIEWS.indexOf(this.cardsView()) + 1) % CARD_VIEWS.length]);
                 this.render();
                 if (!this.modal.hidden) this.showMenu();
             }],
@@ -239,11 +285,21 @@ export class CompanionView {
             box.append(result);
             if (step.dice && !step.rolled) {
                 buttons.hidden = true;
-                this.rollDice(step).then(() => {
+                const go = () => this.rollDice(step).then(() => {
                     step.rolled = true;
                     result.textContent = step.after;
                     buttons.hidden = false;
                 });
+                if (step.mine) go(); // the player already paused to pick the target and saw the odds
+                else {
+                    // the computer's attack: a beat to see who is firing at what, and the odds, before the dice roll
+                    const pct = Math.round(100 * hitChance(step.total, step.dice.length));
+                    const need = step.total <= 1 ? t('cmp.roll.sure') : step.total >= 10 ? t('cmp.roll.needZero') : t('cmp.roll.need', { total: step.total });
+                    const ready = h('p', { class: 'small muted' }, `${need} (${pct} %)`);
+                    const rollBtn = h('div', { class: 'buttons' },
+                        h('button', { class: 'primary', onclick: () => { ready.remove(); rollBtn.remove(); go(); } }, t('cmp.roll.go')));
+                    box.append(ready, rollBtn);
+                }
             } else result.textContent = step.after;
         }
         box.append(buttons);
@@ -301,7 +357,7 @@ export class CompanionView {
             case 'bid': {
                 const opts = [...req.options].sort((a, b) => b.initiative - a.initiative);
                 return box(t('cmp.ask.bid'), h('p', {}, t('cmp.ask.bidText')), view.players[this.botSeat].bidding ? h('p', { class: 'small muted' }, t('cmp.ask.bidBot')) : null,
-                    h('div', { class: 'opts grid' }, opts.map((o) => btn(o, t('cmp.ask.bidOpt', { card: cardName(o.card), n: o.initiative })))));
+                    h('div', { class: 'opts grid' }, opts.map((o) => btn(o, cardLabel(o.card)))));
             }
             case 'play':
                 return this.playCard(req, view);
@@ -318,9 +374,9 @@ export class CompanionView {
                 return box(t('cmp.ask.target'), hint, h('div', { class: 'opts grid' }, req.options.map((o) => btn(o, o.tile))));
             case 'bolster':
             case 'inspire':
-                return box(t(`cmp.ask.${req.kind}`, { left: req.left }), h('div', { class: 'opts' }, req.options.map((o) => btn(o, o.id === 'done' ? t('opt.done') : cardName(o.card), o.id === 'done' ? 'quiet' : ''))));
+                return box(t(`cmp.ask.${req.kind}`, { left: req.left }), h('div', { class: 'opts' }, req.options.map((o) => btn(o, o.id === 'done' ? t('opt.done') : cardLabel(o.card), o.id === 'done' ? 'quiet' : ''))));
             case 'leftover':
-                return box(t('cmp.ask.leftover', { left: req.left }), h('div', { class: 'opts grid' }, req.options.map((o) => btn(o, cardName(o.card)))));
+                return box(t('cmp.ask.leftover', { left: req.left }), h('div', { class: 'opts grid' }, req.options.map((o) => btn(o, cardLabel(o.card)))));
             case 'casualty':
                 return box(t('cmp.ask.casualty', { unit: un(req.unit) }), h('p', { class: 'small' }, t('cmp.ask.casualtyRule')),
                     h('div', { class: 'opts' }, req.options.map((o) => btn(o, t(`cmp.ask.from.${o.from}`)))));
@@ -347,7 +403,7 @@ export class CompanionView {
         return h('div', { class: 'card-box ask play' }, h('h3', {}, t('cmp.ask.play')),
             h('p', { class: 'small muted' }, t('cmp.ask.playHand', { n: p.handCount })),
             h('div', { class: 'opts grid' }, cards.map((type) => h('button', { class: 'opt card-opt', onclick: () => { this.sel = type; this.render(); } },
-                h('b', {}, cardName(type)), where(type) ? h('span', { class: 'small' }, ` · ${where(type)}`) : null))),
+                h('b', {}, cardLabel(type)), where(type) ? h('span', { class: 'small' }, ` · ${where(type)}`) : null))),
             end ? h('div', { class: 'buttons' }, btn(end, t('cmp.ask.end'), 'quiet')) : null);
     }
 
@@ -365,21 +421,12 @@ export class CompanionView {
             h('div', { class: 'opts two' }, req.options.map((o) => btn(o, t(`cmp.roll.${o.id}`), o.id))));
     }
 
-    botPanel(view) {
-        const p = view.players[this.botSeat];
-        const groups = (cards) => {
-            const n = {};
-            for (const c of cards) n[c.split(':')[1]] = (n[c.split(':')[1]] ?? 0) + 1;
-            return Object.entries(n).map(([type, k]) => `${cardName(type)}${k > 1 ? ` ×${k}` : ''}`).join(', ') || t('cmp.check.none');
-        };
-        return h('details', { class: 'info bot' }, h('summary', {}, `${sideName(this.botSeat)} (${t('cmp.bot')}) · ${t('game.handCount', { n: p.handCount })} · ${t('game.deck', { n: p.deckCount })}`),
-            h('p', { class: 'small' }, h('b', {}, `${t('game.discardPile')}: `), groups(p.discard)),
-            h('p', { class: 'small' }, h('b', {}, `${t('game.supply')}: `), groups(p.supply)));
-    }
 
-    logPanel(view) {
-        const lines = view.log.slice(-60).map((e) => h('li', { class: e.k === 'round' ? 'round' : '' }, logLine(e, this.me)));
-        return h('details', { class: 'info log' }, h('summary', {}, t('cmp.menu.log')), h('ol', {}, lines.reverse()));
+    /** `entries` defaults to the live, fully caught-up log; a pending step passes its own (not-yet-revealed) one. */
+    logPanel(view, entries = view.log) {
+        const lines = entries.slice(-60).map((e) => h('li', { class: e.k === 'round' ? 'round' : '' }, logLine(e, this.me)));
+        // reversed: newest first, so its number is the highest rather than "1" (the oldest shown line keeps that)
+        return h('details', { class: 'info log' }, h('summary', {}, t('cmp.menu.log')), h('ol', { reversed: true }, lines.reverse()));
     }
 
     // ------------------------------------------------------------------ the check and the code
@@ -426,7 +473,8 @@ export class CompanionView {
             h('p', { class: 'small' }, t('cmp.check.intro')),
             h('table', {}, h('thead', {}, h('tr', {}, h('th', {}, t('cmp.check.tile')), h('th', {}, t('cmp.check.units')), h('th', {}, t('cmp.check.markers')))), h('tbody', {}, rows)),
             off.length ? h('p', { class: 'small' }, h('b', {}, `${t('cmp.check.offBoard')}: `), off.join(', ')) : null,
-            deckPanel(view, this.me, { open: true }),
+            // the player's piles to check against the table (the computer's are in its panel, by player view)
+            cardPanels(this.cardsView(), view, this.me, this.botSeat, { open: true, fold: this.fold(() => this.showCheck()) }).slice(0, 1),
             h('div', { class: 'buttons' }, h('button', { class: 'primary', onclick: () => this.hideModal() }, t('cmp.close')))));
     }
 

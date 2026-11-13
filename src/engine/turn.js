@@ -6,7 +6,7 @@ import { TYPES, coverOf, defenceOf, typeId, typeOf, unitOfCard } from './data.js
 import { randomInt } from './rng.js';
 import {
     board, bring, casualty, casualtyFrom, checkWin, controls, dist, drawCards, enemiesOn, gainFog, handPool, hasMarker,
-    isExternal, moveUnit, onBoard, positionOf, sc, sideOf, spawn,
+    isExternal, land, moveUnit, onBoard, paradropRoll, paradropSide, positionOf, sc, sideOf, spawn,
 } from './state.js';
 
 /** Distinct cards of a list by type, keeping the first of each (identical cards are offered once). */
@@ -59,6 +59,12 @@ export function available(g, seat, cid, action) {
     const uid = unitOfCard(cid);
     const pos = uid && positionOf(g, uid);
     const fresh = uid && !g.units[uid].tile; // would be placed first: moving 0 tiles still brings it in
+    if (fresh && pos == null) {
+        if (paradropSide(sc(g)) !== sideOf(seat)) return false; // no spawn marker brings it back ([D-40])
+        // by paradrop: where it lands is not known yet, so the action is open if it could do something somewhere
+        if (action.a === 'attack' || action.a === 'suppress') return onBoard(g, 1 - seat).some((e) => action.a !== 'suppress' || !e.suppressed);
+        if (['control', 'target', 'move', 'scout', 'stalk'].includes(action.a)) return true;
+    }
     switch (action.a) {
         case 'move':
             return fresh || steps(g, seat, pos, 'move').length > 0;
@@ -174,8 +180,16 @@ function* leftovers(g, seat) {
 function* doAction(g, seat, cid, action) {
     const p = g.players[seat];
     const uid = unitOfCard(cid);
-    const fresh = uid ? spawn(g, uid) : false;
-    if (fresh) {
+    let fresh = false;
+    if (uid && !g.units[uid].tile && paradropSide(sc(g)) === sideOf(seat)) {
+        // scenario 16: the dice first (the step shows them before the counter lands), then the action
+        const drop = paradropRoll(g);
+        yield* beat(g, 'paradrop', { seat, unit: uid, rolls: drop.rolls, tile: drop.tile });
+        land(g, uid, drop);
+        fresh = true;
+        checkWin(g, seat);
+    } else if (uid && spawn(g, uid)) {
+        fresh = true;
         yield* beat(g, 'spawn', { unit: uid });
         checkWin(g, seat);
     }
@@ -200,14 +214,19 @@ function* doAction(g, seat, cid, action) {
             break;
         case 'target': {
             const tiles = targetTiles(g, seat, uid);
+            if (!tiles.length) break; // a Mortar that landed by paradrop with nothing three tiles away
             const t = yield* choose(g, seat, 'target', tiles.map((tile) => ({ id: `tile:${tile}`, tile })), { unit: uid });
             g.targets[seat] = t.slice(5);
             log(g, 'target', { seat, tile: g.targets[seat] });
             break;
         }
-        case 'control':
-            control(g, seat, positionOf(g, uid));
+        case 'control': {
+            const tile = positionOf(g, uid);
+            // only after a paradrop onto enemy counters: the action was chosen before the dice
+            if (canControl(g, seat, tile)) control(g, seat, tile);
+            else log(g, 'controlBlocked', { seat, tile });
             break;
+        }
         case 'recon': {
             const fog = bring(g, seat, (c) => typeOf(c).fog);
             p.removed.push(...p.hand.splice(p.hand.indexOf(fog), 1));

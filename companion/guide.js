@@ -47,7 +47,7 @@ export function guideSteps(entries, me, before, after) {
                 played = `${cardName(e.card)}: ${actionName(e.action, e.value)}`; // as cmp.g.botPlays writes them
                 head = t('cmp.g.botPlays', { card: cardName(e.card), action: actionName(e.action, e.value) });
                 // a card whose effects do not touch the table (Bolster, Command, Inspire…): the card itself is the step
-                if (!entries.slice(i + 1).some((x, j, rest) => x.seat === bot && ['move', 'spawn', 'scouted', 'control', 'target', 'blast', 'attack', 'radio'].includes(x.k)
+                if (!entries.slice(i + 1).some((x, j, rest) => x.seat === bot && ['move', 'spawn', 'paradrop', 'scouted', 'control', 'target', 'blast', 'attack', 'radio'].includes(x.k)
                     && !rest.slice(0, j).some((y) => y.k === 'play' || y.k === 'endTurn'))) {
                     const effects = entries.slice(i + 1).filter((x, j, rest) => x.seat === bot && ['bolster', 'command', 'inspire', 'recon', 'conceal'].includes(x.k)
                         && !rest.slice(0, j).some((y) => y.k === 'play' || y.k === 'endTurn'));
@@ -61,6 +61,7 @@ export function guideSteps(entries, me, before, after) {
                 push({ text: t(mine ? 'cmp.g.rallyYou' : 'cmp.g.rallyBot', { unit: un(e.unit) }), focus: { unit: e.unit }, kind: 'table', mine, head: mine ? null : t('cmp.g.botTurn') });
                 break;
             case 'spawn':
+            case 'paradrop': // scenario 16 (not in the companion yet): where the dice landed it
                 push({ text: t(mine ? 'cmp.g.spawnYou' : 'cmp.g.spawnBot', { unit: un(e.unit), tile: e.tile }), focus: { unit: e.unit, tile: e.tile }, kind: 'table', mine });
                 break;
             case 'move': {
@@ -75,9 +76,13 @@ export function guideSteps(entries, me, before, after) {
                     else if (x.k === 'scouted' && x.seat === bot) scouted.push(x);
                     else break;
                 }
+                // `at` must cover every entry this step folds in, scouted markers included, or its own board would
+                // show the move done but a marker from partway through it still missing (one tile scouted, not all)
                 i = j - 1;
-                push({ text: t('cmp.g.move', { unit: un(e.unit), path: path.join(' → ') }), focus: { unit: e.unit, tiles: path }, arrow: { from: path[0], to: e.unit, kind: 'move', side: SIDES[bot] }, kind: 'table' });
                 at = i;
+                // one arrow per tile stepped onto, not a single one straight from the start to the end
+                const arrows = path.slice(0, -1).map((from, k) => ({ from, to: k === path.length - 2 ? e.unit : path[k + 1], kind: 'move', side: SIDES[bot] }));
+                push({ text: t('cmp.g.move', { unit: un(e.unit), path: path.join(' → ') }), focus: { unit: e.unit, tiles: path }, arrow: arrows, kind: 'table' });
                 for (const x of scouted) push({ text: t('cmp.g.scoutedBot', { side: sideName(bot), tile: x.tile }), focus: { tile: x.tile }, kind: 'table' });
                 break;
             }
@@ -112,9 +117,9 @@ export function guideSteps(entries, me, before, after) {
                 push({
                     text,
                     after: e.dice ? t('cmp.g.dice', { dice: e.dice.join(' '), result }) : t('cmp.g.result', { result }),
-                    dice: e.dice, hit: e.hit,
+                    dice: e.dice, hit: e.hit, total: e.total,
                     focus: { unit: e.target },
-                    arrow: e.kind === 'blast' ? null : { from: e.unit, to: e.target, kind: 'attack', side: SIDES[e.seat] },
+                    arrow: e.kind === 'blast' ? [] : [{ from: e.unit, to: e.target, kind: 'attack', side: SIDES[e.seat] }],
                     kind: 'attack',
                     mine,
                 });
@@ -153,6 +158,11 @@ export function boardAt(before, entries, upto) {
             case 'move':
                 u.tile = e.tile;
                 if (e.k === 'spawn') u.suppressed = false;
+                break;
+            case 'paradrop':
+                u.tile = e.tile;
+                u.suppressed = false;
+                if (e.marked) v.control[e.tile][SIDES[e.seat]] = 'scouted';
                 break;
             case 'eliminated':
                 u.tile = null;

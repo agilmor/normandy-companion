@@ -5,6 +5,7 @@
 import { boardOf } from '../engine/board.js';
 import { SIDES, TYPES, coverOf, defenceOf, hitChance, scenarioById, typeId, unitKind, unitType } from '../engine/data.js';
 import { nextRandom, seedFrom } from '../engine/rng.js';
+import { paradropOdds, paradropSide } from '../engine/state.js';
 
 /** Usefulness of a card in hand, for bidding the least useful one. */
 const KEEP = { PS: 9, R: 8, S: 6, M: 6, SN: 6, SL: 5, PG: 5, MO: 4, FOW: 0 };
@@ -27,8 +28,10 @@ export const placeWeight = (uid) => (kindOf(uid) === 'R' ? 2.2 : 1.2);
  * for it rather than stay on a blocked one, and each step there beats a shot (the user's game of scenario 12: on 9 of
  * 10 points, Germany sat 8 rounds on 7B under fire while 17B, scouted and empty, gave the game; docs/02 §5.2).
  * `claim` and `freeTile`: what a Scout gives for a marker on a free objective, and how much sooner it goes there (`claims`).
+ * `unblock`: per point of the objective, what a hit on the last enemy counter between us and a winning Control adds
+ * to that target (`unblockValue`).
  */
-export const GOAL = { blocked: 0.7, winning: 2.5, radioScore: 200, winOpen: 150, winPull: 42, claim: 30, freeTile: 1.5 };
+export const GOAL = { blocked: 0.7, winning: 2.5, radioScore: 200, winOpen: 150, winPull: 42, claim: 30, freeTile: 1.5, unblock: 25 };
 
 /**
  * A siege: every objective a side goes for has an enemy counter on it that stops its Control (Normandy rule), as
@@ -186,7 +189,23 @@ function targetValue(cx, uid) {
         if (cx.pinGame) v *= 1.6;
         v += 25 * threat(cx, uid);
     }
-    return v;
+    return v + unblockValue(cx, uid);
+}
+
+/**
+ * The last enemy counter on an objective whose Control wins us the game, with a Rifleman of ours already on it: with
+ * the Normandy rule it is all that stops the Control, so a hit on it is worth GOAL.unblock per point of the objective.
+ * Only for a side that plays for points. The user's game of scenario 14 (docs/02 §5.2): a US Rifleman on 16A, one
+ * Control from winning, shot a Machine Gunner on the next tile, not the Scouts that blocked it. Wider versions (any
+ * blocked objective, or a winning one with a Rifleman next to it) lost games in scenario 8, where the enemy is often
+ * hopeless and a hit on a counter with no cards left removes it.
+ */
+function unblockValue(cx, uid) {
+    const t = posOf(cx, uid);
+    const ready = cx.mine.some((u) => u.tile === t && kindOf(u.id) === 'R');
+    const last = cx.foes.filter((f) => f.tile === t).length === 1;
+    if (!cx.sc.win[cx.me].points || !ready || !last || !cx.goals.includes(t) || !cx.blocked(t) || !cx.winsAt(t)) return 0;
+    return GOAL.unblock * cx.view.objectives[t];
 }
 
 function controlScore(cx, tile) {
@@ -310,10 +329,12 @@ const newMarkers = (cx, from, to) => pathTo(cx, from, to).filter((t) => !cx.mark
 const claims = (cx, from, to) => pathTo(cx, from, to).filter(cx.free).reduce((n, t) => n + GOAL.claim * cx.view.objectives[t] * cx.reach(t), 0);
 
 function spawnGuess(cx, uid) {
+    // by paradrop (scenario 16): the likeliest tile
+    if (paradropSide(cx.sc) === cx.me) return paradropOdds(cx.sc).reduce((a, b) => (b.p > a.p ? b : a)).tile;
     const type = unitType(uid);
     const name = type === 'SN' ? 'sniper' : type === 'MO' ? 'mortar' : type.at(-1);
     const sp = cx.sc.spawns[cx.me];
-    return (sp.find((s) => s.who.includes(name)) ?? sp.find((s) => s.who.includes('all'))).tile;
+    return (sp.find((s) => s.who.includes(name)) ?? sp.find((s) => s.who.includes('all')))?.tile ?? null;
 }
 
 function bestTarget(cx, uid) {

@@ -58,10 +58,10 @@ export function shortName(uid) {
 /**
  * @param {any} view
  * @param {{ picks?: Map<string, string>, onPick?: (id: string) => void, viewer: number,
- *   focus?: { unit?: string, tile?: string, tiles?: string[] }, arrow?: { from: string, to: string, kind: 'move' | 'attack', side: string } }} o
+ *   focus?: { unit?: string, tile?: string, tiles?: string[] }, arrow?: { from: string, to: string, kind: 'move' | 'attack', side: string }[] }} o
  *   picks: `tile:12B` / `unit:de:RA` -> the option id they answer; terrain: pixel art on the tiles (else colours only)
  */
-export function drawMap(view, { picks = new Map(), onPick = () => {}, viewer, focus = {}, arrow = null, terrain = true }) {
+export function drawMap(view, { picks = new Map(), onPick = () => {}, viewer, focus = {}, arrow = [], terrain = true }) {
     const sc = scenarioById(view.scenario);
     const { W, H, pos } = layout(sc);
     const svg = s('svg', { viewBox: `-4 -4 ${W + 8} ${H + 8}`, class: `cmap${terrain ? ' terrain' : ''}`, role: 'img' });
@@ -89,13 +89,13 @@ export function drawMap(view, { picks = new Map(), onPick = () => {}, viewer, fo
             g.append(s('path', { d: `M${T - 30} 6 h24 l-6 8.5 l6 8.5 h-24 z`, class: 'flag' }));
             g.append(s('text', { x: T - 20, y: 19.5, class: 'flag-t' }, val));
         }
-        let mx = 12;
+        let mx = 15;
         for (const side of SIDES) {
             const c = view.control[tile.id][side];
             if (!c) continue;
             g.append(s('g', { class: `cmark ${side} ${c}` },
-                s('circle', { cx: mx, cy: 13, r: 9.5 }),
-                s('text', { x: mx, y: 17 }, c === 'controlled' ? '★' : '◉')));
+                s('circle', { cx: mx, cy: 16, r: 9.5 }),
+                s('text', { x: mx, y: 20 }, c === 'controlled' ? '★' : '◉')));
             mx += 22;
         }
         for (const sp of spawnsAt[tile.id] ?? []) {
@@ -145,8 +145,21 @@ export function drawMap(view, { picks = new Map(), onPick = () => {}, viewer, fo
             svg.append(el);
         });
     }
-    if (arrow) drawArrow(svg, arrow, at, pos);
+    drawArrows(svg, arrow, at, pos);
     return svg;
+}
+
+/** One or more arrows (a multi-tile move draws one per tile stepped onto); each side's head is defined only once. */
+function drawArrows(svg, arrows, at, pos) {
+    const heads = new Set();
+    for (const a of arrows) {
+        if (!heads.has(a.side)) {
+            heads.add(a.side);
+            svg.append(s('defs', {}, s('marker', { id: `chead-${a.side}`, viewBox: '0 0 10 10', refX: 8, refY: 5, markerWidth: 4, markerHeight: 4, orient: 'auto-start-reverse' },
+                s('path', { d: 'M0 0 L10 5 L0 10 z', class: `chead ${a.side}` }))));
+        }
+        drawArrow(svg, a, at, pos);
+    }
 }
 
 function drawArrow(svg, { from, to, kind, side }, at, pos) {
@@ -157,8 +170,6 @@ function drawArrow(svg, { from, to, kind, side }, at, pos) {
     };
     const a = centre(from), b = centre(to);
     if (!a || !b) return;
-    svg.append(s('defs', {}, s('marker', { id: `chead-${side}`, viewBox: '0 0 10 10', refX: 8, refY: 5, markerWidth: 4, markerHeight: 4, orient: 'auto-start-reverse' },
-        s('path', { d: 'M0 0 L10 5 L0 10 z', class: `chead ${side}` }))));
     const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
     const k0 = a[2] / len, k1 = (len - b[2] - 3) / len;
     svg.append(s('line', { x1: a[0] + (b[0] - a[0]) * k0, y1: a[1] + (b[1] - a[1]) * k0, x2: a[0] + (b[0] - a[0]) * k1, y2: a[1] + (b[1] - a[1]) * k1,
