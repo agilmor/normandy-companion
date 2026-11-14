@@ -11,6 +11,18 @@ import { handDeckPlay } from '../companion/cards.js';
 
 const board = (v) => ({ units: v.units, control: v.control, targets: v.targets, objectives: v.objectives });
 
+/** Card ids or a { type: n } count, as a { type: n } count without empty types. */
+function counts(cards) {
+    if (!cards) return cards;
+    const n = {};
+    for (const [type, k] of Array.isArray(cards) ? cards.map((c) => [c.split(':')[1], 1]) : Object.entries(cards)) n[type] = (n[type] ?? 0) + k;
+    return Object.fromEntries(Object.entries(n).filter(([, k]) => k > 0));
+}
+const piles = (v) => v.players.map((p) => ({
+    handCount: p.handCount, deckCount: p.deckCount, removedCount: p.removedCount,
+    hidden: counts(p.hidden), discard: counts(p.discard), play: counts(p.play), supply: counts(p.supply), removed: counts(p.removed),
+}));
+
 /** Plays a game as the companion does: the player's answer, then the bot until the player's next decision. */
 function play(scenario, me, botDice, onTurn) {
     const s = new Session({ scenario, seed: `c${scenario}${me}`, external: me, botDice });
@@ -48,8 +60,12 @@ test('companion: every step has a text, and the board rebuilt from the log ends 
     for (const sc of SCENARIOS) {
         const me = sc.id % 2;
         const kinds = new Set();
-        const s = play(sc.id, me, sc.id % 3 ? 'virtual' : 'physical', (entries, before, after) => {
-            assert.deepEqual(board(boardAt(before, entries, entries.length - 1)), board(after));
+        const s = play(sc.id, me, sc.id % 3 ? 'virtual' : 'physical', (entries, before, after, game) => {
+            const rebuilt = boardAt(before, entries, entries.length - 1);
+            assert.deepEqual(board(rebuilt), board(after));
+            // halfway through an external seat's leftovers, the cards it already named are out of its hand but
+            // not yet in the log (one 'leftover' entry once it has named them all)
+            if (game.pending?.kind !== 'leftover') assert.deepEqual(piles(rebuilt), piles(after), `scenario ${sc.id}: the cards rebuilt from the log`);
             for (const step of guideSteps(entries, me, before, after)) {
                 kinds.add(step.kind);
                 assert.ok(step.text && !/\{\w+\}/.test(step.text), `scenario ${sc.id}: ${step.text}`);

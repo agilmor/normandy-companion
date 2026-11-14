@@ -145,12 +145,148 @@ export function guideSteps(entries, me, before, after) {
     return out;
 }
 
+const ROUND_DRAW = 4; // game.js: both sides draw 4 at the start of each round
+
+/** Card ids or a { type: n } count, as a new { type: n } count. */
+function counts(cards) {
+    const n = {};
+    if (Array.isArray(cards)) for (const c of cards) n[c.split(':')[1]] = (n[c.split(':')[1]] ?? 0) + 1;
+    else Object.assign(n, cards);
+    return n;
+}
+
+const size = (pile) => Object.values(pile).reduce((a, b) => a + b, 0);
+
+function add(pile, type, k = 1) {
+    pile[type] = (pile[type] ?? 0) + k;
+    if (!pile[type]) delete pile[type];
+}
+
 /**
- * The board after entries[0..upto] (the counters, markers, targets and objective values those entries change), from
- * the view before them: what the map shows with each step.
+ * Both sides' cards after entries[0..upto], from their view before them (`players`), with the piles as { type: n }
+ * counts: what the cards panel shows with each step, so it never gets ahead of the "Done" cards either. An
+ * external seat's draws are in the log ('draw', after any 'reshuffle'); any other seat's are not, so they are
+ * worked out from where they happen (a round, Recon, Command) and what its deck and discard pile hold.
+ */
+export function playersAt(players, entries, upto) {
+    const ps = players.map((p) => ({
+        ...p, hidden: p.hidden && counts(p.hidden), discard: counts(p.discard), play: counts(p.play), supply: counts(p.supply), removed: p.removed && counts(p.removed),
+    }));
+    // out of the hand: for an external seat, out of the hand and deck it holds together
+    const fromHand = (p, type) => {
+        p.handCount--;
+        if (p.hidden) add(p.hidden, type, -1);
+    };
+    const draw = (p, n) => {
+        if (n > p.deckCount && size(p.discard)) {
+            p.deckCount += size(p.discard);
+            p.discard = {};
+        }
+        const k = Math.min(n, p.deckCount);
+        p.deckCount -= k;
+        p.handCount += k;
+    };
+    const remove = (p, type) => {
+        if (p.removed) add(p.removed, type);
+        p.removedCount++;
+    };
+    for (const e of entries.slice(0, upto + 1)) {
+        const p = ps[e.seat];
+        switch (e.k) {
+            case 'round':
+                for (const q of ps) if (!q.external) draw(q, ROUND_DRAW);
+                break;
+            case 'reshuffle':
+                if (!p.external) break;
+                p.deckCount += size(p.discard);
+                for (const [type, k] of Object.entries(p.discard)) add(p.hidden, type, k);
+                p.discard = {};
+                break;
+            case 'draw':
+                p.deckCount -= e.n;
+                p.handCount += e.n;
+                break;
+            case 'bids':
+                e.cards.forEach((type, s) => {
+                    if (!type) return;
+                    fromHand(ps[s], type);
+                    add(ps[s].discard, type);
+                });
+                break;
+            case 'play':
+            case 'rally':
+                fromHand(p, e.card);
+                add(p.play, e.card);
+                break;
+            case 'hunker':
+                fromHand(p, e.card);
+                add(p.supply, e.card);
+                break;
+            case 'recon':
+                fromHand(p, 'FOW');
+                remove(p, 'FOW');
+                if (!p.external) draw(p, 1);
+                break;
+            case 'command':
+                if (!p.external) draw(p, e.n);
+                break;
+            case 'conceal': {
+                const q = ps[1 - e.seat];
+                if (!q.supply.FOW) break;
+                add(q.supply, 'FOW', -1);
+                add(q.discard, 'FOW');
+                break;
+            }
+            case 'scouted':
+                if (!e.fog) break;
+                add(p.supply, 'FOW', -1);
+                add(p.discard, 'FOW');
+                break;
+            case 'bolster':
+                add(p.supply, e.card, -1);
+                add(p.discard, e.card);
+                break;
+            case 'inspire':
+                add(p.play, e.card, -1);
+                p.handCount++;
+                if (p.hidden) add(p.hidden, e.card);
+                break;
+            case 'casualty': {
+                const type = e.unit.slice(3); // a unit's cards are of its own type
+                if (e.from === 'hand') fromHand(p, type);
+                else if (e.from === 'deck') {
+                    p.deckCount--;
+                    if (p.hidden) add(p.hidden, type, -1);
+                } else add(p[e.from], type, -1);
+                remove(p, type);
+                break;
+            }
+            case 'leftover':
+                // an external seat answers card by card, each going to the discard pile at once, and the log only
+                // lists them all when done: the first ones may already be out of the hand in `players`
+                for (const type of e.cards.slice(Math.max(0, e.cards.length - p.handCount))) {
+                    fromHand(p, type);
+                    add(p.discard, type);
+                }
+                break;
+            case 'endTurn':
+                for (const [type, k] of Object.entries(p.play)) add(p.discard, type, k);
+                p.play = {};
+                break;
+            default:
+                break;
+        }
+    }
+    return ps;
+}
+
+/**
+ * The board after entries[0..upto] (the counters, markers, targets and objective values those entries change, and
+ * both sides' cards), from the view before them: what the map and the cards panel show with each step.
  */
 export function boardAt(before, entries, upto) {
-    const v = { ...before, units: structuredClone(before.units), control: structuredClone(before.control), objectives: { ...before.objectives }, targets: [...before.targets] };
+    const v = { ...before, units: structuredClone(before.units), control: structuredClone(before.control), objectives: { ...before.objectives }, targets: [...before.targets],
+        players: playersAt(before.players, entries, upto) };
     for (const e of entries.slice(0, upto + 1)) {
         const u = e.unit && v.units[e.unit];
         switch (e.k) {

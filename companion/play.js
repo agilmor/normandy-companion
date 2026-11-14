@@ -10,7 +10,8 @@ import { h } from '../src/ui/dom.js';
 import { t, tr } from '../src/i18n/index.js';
 import { Session, makeRecord, encodeRecord } from '../src/engine/session.js';
 import { CONTACT, bugMail, appKind } from './contact.js';
-import { withoutRoundLimit } from '../src/engine/state.js';
+import { createState, withoutRoundLimit } from '../src/engine/state.js';
+import { view as viewOf } from '../src/engine/view.js';
 import { TILES, hitChance, scenarioById, unitType } from '../src/engine/data.js';
 import { computerBot } from '../src/ai/computerBot.js';
 import { actionName, cardLabel, cardName, logLine, resultText, sideName, unitName } from '../src/ui/text.js';
@@ -82,7 +83,8 @@ export class CompanionView {
         this.onKeydown = (e) => { if (e.key === 'Escape' && !this.modal.hidden) this.hideModal(); };
         document.addEventListener('keydown', this.onKeydown);
         // a new game starts with the steps of its first round (draw your cards); a saved one where it was
-        if (!game.answers?.length) this.steps = this.stepsOf(this.session.state.log, this.view());
+        // (from the table as set up, before any of the log: the cards rebuilt from it would otherwise count it twice)
+        if (!game.answers?.length) this.steps = this.stepsOf(this.session.state.log, viewOf(createState(this.session.setup), this.me));
         this.runBot(0, null);
     }
 
@@ -181,7 +183,8 @@ export class CompanionView {
             : this.session.over ? this.endCard() : req ? this.askCard(req, view) : null;
         const cardsView = this.cardsView();
         const keys = cardsView === 'player' ? ['deck', 'bot'] : ['cards'];
-        const cards = cardPanels(cardsView, view, this.me, this.botSeat, { fold: this.fold(() => this.render()), detail: this.cardsDetail() });
+        // as the map: the cards as of the step being shown, not the engine's, which may be well ahead of it
+        const cards = cardPanels(cardsView, this.shown, this.me, this.botSeat, { fold: this.fold(() => this.render()), detail: this.cardsDetail() });
         this.panel.replaceChildren(main ?? '', ...cards.map((el, i) => this.openPanel(keys[i], el)),
             this.openPanel('log', step ? this.logPanel(view, step.log) : this.logPanel(view)));
     }
@@ -473,7 +476,7 @@ export class CompanionView {
     }
 
     showCheck() {
-        const view = this.view();
+        const view = this.steps[0]?.board ?? this.view();
         const rows = this.sc.tiles.map((tile) => {
             const { units, marks } = this.tileContents(tile.id, view);
             return h('tr', {}, h('td', {}, h('b', {}, tile.id)), h('td', {}, units), h('td', {}, marks));
