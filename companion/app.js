@@ -10,7 +10,7 @@ import { view } from '../src/engine/view.js';
 import { decodeRecord, replayRecord } from '../src/engine/session.js';
 import { sideName } from '../src/ui/text.js';
 import { drawMap } from './map.js';
-import { CARD_VIEWS, cardList } from './cards.js';
+import { CARD_VIEWS, cardList, cardsChoice } from './cards.js';
 import { CompanionView, loadSaved } from './play.js';
 import { warmDice } from '../src/ui/combat.js';
 import { CONTACT, SOURCE, VERSION, bugMail, appKind } from './contact.js';
@@ -51,7 +51,7 @@ function setupScreen() {
     let botDice = p.botDice ?? 'virtual';
     let controlRule = p.controlRule ?? 'normandy';
     let terrain = p.terrain !== false;
-    const cardsView = CARD_VIEWS.includes(p.cards) ? p.cards : 'player';
+    const { view: cardsView, detail } = cardsChoice(p);
     const info = h('div', { class: 'scen-info' });
     const showInfo = () => {
         const sc = SCENARIOS.find((x) => x.id === scenario);
@@ -80,7 +80,8 @@ function setupScreen() {
     const mapSel = h('select', { onchange: (e) => { terrain = e.target.value === 'terrain'; savePrefs({ terrain }); showInfo(); } },
         ['terrain', 'diagram'].map((v) => h('option', { value: v, selected: (v === 'terrain') === terrain }, t(`cmp.setup.map.${v}`))));
     // the cards panel during the game (cards.js; also in ☰)
-    const cardsSel = h('select', { onchange: (e) => savePrefs({ cards: e.target.value }) },
+    // (the detail saved with it: an old 'detailed' view carries its detail over to the new choice, then in ☰ only)
+    const cardsSel = h('select', { onchange: (e) => savePrefs({ cards: e.target.value, detail }) },
         CARD_VIEWS.map((v) => h('option', { value: v, selected: v === cardsView }, t(`cmp.cards.view.${v}`))));
     const ruleHelp = h('span', { class: 'small muted' });
     const showRule = () => (ruleHelp.textContent = t(`setup.controlRule.${controlRule}.help`));

@@ -110,7 +110,6 @@ input, select, textarea { background: #14160f; color: var(--ink); border: 1px so
 .cards-grid .cards-head div { font-weight: 400; }
 .cards-grid .cards-title { grid-column: 1 / -1; font-weight: 600; margin-top: 4px; cursor: pointer; user-select: none; }
 .cards-grid .right { border-left: 1px solid var(--line); padding-left: 10px; }
-.cards-grid .cards-hidden { margin-top: 3px; font-size: 0.95em; }
 
 .modal { position: fixed; inset: 0; background: rgb(0 0 0 / 0.55); display: flex; align-items: center; justify-content: center; z-index: 20; padding: 16px; }
 .modal[hidden] { display: none; }

@@ -7,6 +7,7 @@ import { Session, decodeRecord } from '../src/engine/session.js';
 import { randomBot } from '../src/ai/randomBot.js';
 import { context, heuristicBot, scorePlay } from '../src/ai/heuristicBot.js';
 import { boardAt, guideSteps } from '../companion/guide.js';
+import { handDeckPlay } from '../companion/cards.js';
 
 const board = (v) => ({ units: v.units, control: v.control, targets: v.targets, objectives: v.objectives });
 
@@ -24,6 +25,24 @@ function play(scenario, me, botDice, onTurn) {
     }
     return s;
 }
+
+test('companion: the detail of deck, hand and play, counted from what anyone may see, is what the engine holds', () => {
+    const counted = (n) => Object.fromEntries(Object.entries(n).filter(([, k]) => k > 0).sort());
+    for (const sc of SCENARIOS.filter((x) => x.id % 3 === 0)) {
+        const me = sc.id % 2;
+        const s = play(sc.id, me, 'virtual', (entries, before, after, game) => {
+            for (const seat of [0, 1]) {
+                const p = game.state.players[seat];
+                const real = counted(Object.fromEntries(Object.entries([...p.hand, ...p.deck, ...p.play].reduce((n, c) => ({ ...n, [c.split(':')[1]]: (n[c.split(':')[1]] ?? 0) + 1 }), {}))));
+                const shown = handDeckPlay(after, seat);
+                // the computer's, only while none of its cards are removed (the rules keep those from the player)
+                if (seat !== me && p.removed.length) assert.equal(shown, null);
+                else assert.deepEqual(counted(shown), real, `scenario ${sc.id}, seat ${seat}`);
+            }
+        });
+        assert.ok(s.state.result);
+    }
+});
 
 test('companion: every step has a text, and the board rebuilt from the log ends where the engine is', () => {
     for (const sc of SCENARIOS) {
