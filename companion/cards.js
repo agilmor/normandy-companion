@@ -70,8 +70,8 @@ const countTypes = (types) => {
 };
 
 // ------------------------------------------------------------------ the cards panel, three ways (docs/02 §7.9)
-// 'player': one panel per player (the player's with the cards they may hold in hand and deck); 'compared': one
-// panel, both players side by side pile by pile, sections that fold (PR #1 of the public repository, by Albert Gil);
+// 'player': one panel per player; 'compared': one panel, both players side by side pile by pile, sections that fold
+// (PR #1 of the public repository, by Albert Gil); the same cards either way, only laid out differently;
 // 'detailed': the same, with the player's hand-and-deck cards too. Chosen on the start screen and in ☰.
 
 export const CARD_VIEWS = ['player', 'compared', 'detailed'];
@@ -82,26 +82,26 @@ export function cardPanels(viewName, view, me, botSeat, { open = false, fold } =
     return [deckPanel(view, me, { open }), botPanel(view, botSeat, { open })];
 }
 
-/** The player's cards as the app counts them: hand and deck only together, the rest pile by pile. */
+/** The player's cards as the app counts them: how many in deck and hand, the rest pile by pile. */
 export function deckPanel(view, me, { open = false } = {}) {
     const p = view.players[me];
     const row = (label, text) => [h('b', {}, label), h('span', {}, text || '—')];
     return h('details', { class: 'info deck-panel', open: open || null },
         h('summary', {}, `${t('cmp.deck.title', { side: sideName(me) })} · ${t('cmp.deck.counts', { deck: p.deckCount, hand: p.handCount })}`),
         h('div', { class: 'piles' },
-            row(t('cmp.deck.hidden'), cardList(p.hidden)),
             row(t('cmp.deck.discard'), cardList(p.discard)),
             row(t('cmp.deck.play'), cardList(p.play)),
             row(t('cmp.deck.supply'), cardList(p.supply)),
             row(t('cmp.deck.removed'), cardList(p.removed ?? []))));
 }
 
-/** The computer's cards: what anyone may see (its discard pile and supply), and how many in hand and deck. */
+/** The computer's cards: what anyone may see (its play area, discard pile and supply), and how many in hand and deck. */
 export function botPanel(view, botSeat, { open = false } = {}) {
     const p = view.players[botSeat];
     const list = (cards) => cardList(cards) || t('cmp.check.none');
     return h('details', { class: 'info bot', open: open || null },
         h('summary', {}, `${sideName(botSeat)} (${t('cmp.bot')}) · ${t('game.handCount', { n: p.handCount })} · ${t('game.deck', { n: p.deckCount })}`),
+        h('p', { class: 'small' }, h('b', {}, `${t('game.play')}: `), list(p.play)),
         h('p', { class: 'small' }, h('b', {}, `${t('game.discardPile')}: `), list(p.discard)),
         h('p', { class: 'small' }, h('b', {}, `${t('game.supply')}: `), list(p.supply)));
 }
