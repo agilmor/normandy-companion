@@ -15,4 +15,4 @@ body:
   - type: input
     attributes:
       label: Version, browser or phone / Versión, navegador o móvil
-      placeholder: 0.4.1-beta, Chrome on Android
+      placeholder: 0.4.2-beta, Chrome on Android

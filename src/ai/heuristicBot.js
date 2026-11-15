@@ -3,7 +3,7 @@
 // times the value of the target is highest; Bolster brings in Riflemen first. It bids its least useful card.
 
 import { boardOf } from '../engine/board.js';
-import { SIDES, TYPES, coverOf, tileCover, defenceOf, hitChance, scenarioById, typeId, unitKind, unitType } from '../engine/data.js';
+import { SIDES, TYPES, coverOf, tileCover, defenceOf, hitChance, scenarioById, typeId, typeOf, unitKind, unitType } from '../engine/data.js';
 import { nextRandom, seedFrom } from '../engine/rng.js';
 import { paradropOdds, paradropSide } from '../engine/state.js';
 
@@ -288,7 +288,7 @@ export function scorePlay(cx, o) {
         case 'stalk':
             return moveScore(cx, o, uid, from);
         case 'recon':
-            return 38;
+            return CARDS.command * drawValue(cx, 1) + CARDS.reconThin;
         case 'conceal':
             return view.players[1 - seat].supply.some((c) => typeId(c) === 'FOW') ? 12 : -1;
         case 'bolster': {
@@ -297,7 +297,7 @@ export function scorePlay(cx, o) {
             return picks.reduce((a, b) => a + b, 0) * 2.5;
         }
         case 'command':
-            return 18 * o.value;
+            return CARDS.command * o.value * drawValue(cx, o.value);
         case 'inspire': {
             const best = Math.max(0, ...p.play.filter((c) => !o.squad || TYPES[typeId(c)].squad === o.squad).map((c) => keepOf(cx, TYPES[typeId(c)].kind) ?? 0));
             return best * 4;
@@ -314,6 +314,69 @@ export function scorePlay(cx, o) {
         default:
             return 0;
     }
+}
+
+/**
+ * Weights of the cards a turn brings that the bot cannot see yet (Albert Gil's games on BGG, 2026-11-15: the
+ * Platoon Sergeant bolstered 122 times out of 124, at 18 a card Command was worth half a Bolster 3). `command`: a card
+ * drawn with Command or Recon is worth that share of what the cards of the deck are worth played now (`drawValue`),
+ * and Recon adds `reconThin` for the Fog of War it takes out of the deck for good (it was 38, whatever the deck).
+ * `reconKeep`: in the bid, a Fog of War that a Scout in hand could Recon out of the deck is kept like that (KEEP) and
+ * not bid (it bid the Fog of War every time and had none left to Recon). Against the bot before: 57.7 % (docs/02 §5.3).
+ */
+export const CARDS = { command: 1, reconKeep: 5, reconThin: 15 };
+
+/**
+ * What one card drawn now is worth, on average: each card of the deck (what the bot knows it holds and does not see)
+ * by its best play here, Fog of War nothing. The first `n` come from the deck; past its end, from the discard pile.
+ */
+export function drawValue(cx, n = 1) {
+    const p = cx.view.players[cx.seat];
+    const { deck, supply } = cx.sc.cards[cx.me];
+    const left = {};
+    for (const pile of [deck, supply]) for (const [type, k] of Object.entries(pile)) left[type] = (left[type] ?? 0) + k;
+    for (const c of [...(p.hand ?? []), ...p.discard, ...p.play, ...p.supply, ...(p.removed ?? [])]) left[typeId(c)]--;
+    // a deck too short: the discard pile is shuffled into it
+    if (p.deckCount < n) for (const c of p.discard) left[typeId(c)]++;
+    let sum = 0;
+    let count = 0;
+    for (const [type, k] of Object.entries(left)) {
+        if (k <= 0) continue;
+        sum += k * cardWorth(cx, type);
+        count += k;
+    }
+    return count ? sum / count : 0;
+}
+
+/** A card's best play now, roughly (no Command or Recon, Control only where it could be taken, Blast only with a target), at least 0. */
+function cardWorth(cx, type) {
+    const t = TYPES[type];
+    if (t.fog) return 0;
+    const uid = unitOf(cx.seat, type);
+    const u = uid && cx.view.units[uid];
+    if (u?.tile && u.suppressed) return scorePlay(cx, { id: 'x', card: type, action: 'rally' });
+    if (uid && !u?.tile && !spawnGuess(cx, uid)) return 0; // off the board with nowhere to come in
+    let best = 0;
+    for (const a of t.actions) {
+        if (a.a === 'command' || a.a === 'recon' || (a.a === 'blast' && !cx.view.targets[cx.seat])) continue;
+        if (a.a === 'control') {
+            const at = u?.tile;
+            if (!at || !cx.view.objectives[at] || cx.blocked(at) || (cx.view.control[at][cx.me] === 'controlled' && !cx.pump(at))) continue;
+        }
+        best = Math.max(best, scorePlay(cx, { id: 'x', card: type, action: a.a, value: a.v, squad: a.squad }));
+    }
+    return best;
+}
+
+/** A Fog of War in the bid: kept (CARDS.reconKeep) while the hand has a ready Scout for each Fog of War in it. */
+function fogKeep(cx, hand) {
+    const fogs = hand.filter((c) => typeOf(c).fog).length;
+    const scouts = hand.filter((c) => {
+        const t = typeOf(c);
+        const u = t.unit && cx.view.units[`${cx.me}:${t.unit}`];
+        return t.actions.some((a) => a.a === 'recon') && !(u?.tile && u.suppressed);
+    }).length;
+    return fogs <= scouts ? CARDS.reconKeep : KEEP.FOW;
 }
 
 const fogCost = (p) => 4 + p.discard.filter((c) => typeId(c) === 'FOW').length;
@@ -384,8 +447,11 @@ export function heuristicBot(seed) {
     return (req, view) => {
         const cx = context(view, req.seat);
         switch (req.kind) {
-            case 'bid':
-                return pick(req.options, (o) => -(keepOf(cx, TYPES[o.card].kind) ?? 5) * 10 + TYPES[o.card].initiative);
+            case 'bid': {
+                const hand = view.players[req.seat].hand;
+                const keep = (o) => (TYPES[o.card].fog ? fogKeep(cx, hand) : keepOf(cx, TYPES[o.card].kind) ?? 5);
+                return pick(req.options, (o) => -keep(o) * 10 + TYPES[o.card].initiative);
+            }
             case 'play':
                 return pick(req.options, (o) => scorePlay(cx, o));
             case 'move': {
