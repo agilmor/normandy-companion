@@ -7,8 +7,21 @@ import { Session, decodeRecord } from '../src/engine/session.js';
 import { randomBot } from '../src/ai/randomBot.js';
 import { context, heuristicBot, scorePlay } from '../src/ai/heuristicBot.js';
 import { boardAt, guideSteps } from '../companion/guide.js';
+import { cardsChoice, handDeckPlay } from '../companion/cards.js';
 
 const board = (v) => ({ units: v.units, control: v.control, targets: v.targets, objectives: v.objectives });
+
+/** Card ids or a { type: n } count, as a { type: n } count without empty types. */
+function counts(cards) {
+    if (!cards) return cards;
+    const n = {};
+    for (const [type, k] of Array.isArray(cards) ? cards.map((c) => [c.split(':')[1], 1]) : Object.entries(cards)) n[type] = (n[type] ?? 0) + k;
+    return Object.fromEntries(Object.entries(n).filter(([, k]) => k > 0));
+}
+const piles = (v) => v.players.map((p) => ({
+    handCount: p.handCount, deckCount: p.deckCount, removedCount: p.removedCount,
+    hidden: counts(p.hidden), discard: counts(p.discard), play: counts(p.play), supply: counts(p.supply), removed: counts(p.removed),
+}));
 
 /** Plays a game as the companion does: the player's answer, then the bot until the player's next decision. */
 function play(scenario, me, botDice, onTurn) {
@@ -25,12 +38,34 @@ function play(scenario, me, botDice, onTurn) {
     return s;
 }
 
+test('companion: the detail of deck, hand and play, counted from what anyone may see, is what the engine holds', () => {
+    const counted = (n) => Object.fromEntries(Object.entries(n).filter(([, k]) => k > 0).sort());
+    for (const sc of SCENARIOS.filter((x) => x.id % 3 === 0)) {
+        const me = sc.id % 2;
+        const s = play(sc.id, me, 'virtual', (entries, before, after, game) => {
+            for (const seat of [0, 1]) {
+                const p = game.state.players[seat];
+                const real = counted(Object.fromEntries(Object.entries([...p.hand, ...p.deck, ...p.play].reduce((n, c) => ({ ...n, [c.split(':')[1]]: (n[c.split(':')[1]] ?? 0) + 1 }), {}))));
+                const shown = handDeckPlay(after, seat);
+                // the computer's, only while none of its cards are removed (the rules keep those from the player)
+                if (seat !== me && p.removed.length) assert.equal(shown, null);
+                else assert.deepEqual(counted(shown), real, `scenario ${sc.id}, seat ${seat}`);
+            }
+        });
+        assert.ok(s.state.result);
+    }
+});
+
 test('companion: every step has a text, and the board rebuilt from the log ends where the engine is', () => {
     for (const sc of SCENARIOS) {
         const me = sc.id % 2;
         const kinds = new Set();
-        const s = play(sc.id, me, sc.id % 3 ? 'virtual' : 'physical', (entries, before, after) => {
-            assert.deepEqual(board(boardAt(before, entries, entries.length - 1)), board(after));
+        const s = play(sc.id, me, sc.id % 3 ? 'virtual' : 'physical', (entries, before, after, game) => {
+            const rebuilt = boardAt(before, entries, entries.length - 1);
+            assert.deepEqual(board(rebuilt), board(after));
+            // halfway through an external seat's leftovers, the cards it already named are out of its hand but
+            // not yet in the log (one 'leftover' entry once it has named them all)
+            if (game.pending?.kind !== 'leftover') assert.deepEqual(piles(rebuilt), piles(after), `scenario ${sc.id}: the cards rebuilt from the log`);
             for (const step of guideSteps(entries, me, before, after)) {
                 kinds.add(step.kind);
                 assert.ok(step.text && !/\{\w+\}/.test(step.text), `scenario ${sc.id}: ${step.text}`);
@@ -119,4 +154,10 @@ test('a bug report is a mailto: link with the game code, or the code by the clip
     const long = bugMail('a@b.c', { code: `UNN1.${'x'.repeat(3000)}` });
     assert.equal(long.clipboard, true);
     assert.ok(long.url.length <= 1800 && !long.url.includes('xxxx'));
+});
+
+test('companion: the cards panel shows the detail unless the player turns it off, and an old "detailed" view becomes "compared"', () => {
+    assert.deepEqual(cardsChoice({}), { view: 'player', detail: true });
+    assert.deepEqual(cardsChoice({ cards: 'compared', detail: false }), { view: 'compared', detail: false });
+    assert.deepEqual(cardsChoice({ cards: 'detailed' }), { view: 'compared', detail: true });
 });

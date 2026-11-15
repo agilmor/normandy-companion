@@ -6,6 +6,7 @@
 
 import { h } from '../src/ui/dom.js';
 import { t } from '../src/i18n/index.js';
+import { scenarioById } from '../src/engine/data.js';
 import { cardName, sideName } from '../src/ui/text.js';
 
 /** Card ids or a { type: n } count, grouped: [["RA", 2], ["SB", 1]]. */
@@ -15,6 +16,9 @@ function typeCounts(cards) {
     else Object.assign(n, cards ?? {});
     return Object.entries(n).filter(([, k]) => k > 0);
 }
+
+/** How many cards, from card ids or a { type: n } count. */
+const size = (cards) => typeCounts(cards).reduce((n, [, k]) => n + k, 0);
 
 const counted = ([type, k]) => `${cardName(type)}${k > 1 ? ` ×${k}` : ''}`;
 
@@ -69,39 +73,78 @@ const countTypes = (types) => {
     return m;
 };
 
-// ------------------------------------------------------------------ the cards panel, three ways (docs/02 §7.9)
-// 'player': one panel per player (the player's with the cards they may hold in hand and deck); 'compared': one
-// panel, both players side by side pile by pile, sections that fold (PR #1 of the public repository, by Albert Gil);
-// 'detailed': the same, with the player's hand-and-deck cards too. Chosen on the start screen and in ☰.
+// ------------------------------------------------------------------ the cards panel, two ways (docs/02 §7.9)
+// 'player': one panel per player; 'compared': one panel, both players side by side pile by pile, sections that fold
+// (PR #1 of the public repository, by Albert Gil); the same cards either way, only laid out differently. `detail`,
+// in either: besides how many cards are in deck and hand, which ones are there and in play. The view is chosen on
+// the start screen and in ☰, the detail in ☰.
 
-export const CARD_VIEWS = ['player', 'compared', 'detailed'];
+export const CARD_VIEWS = ['player', 'compared'];
 
-/** The panels for the player's choice of view; `fold` keeps the sections folded in 'compared' and 'detailed'. */
-export function cardPanels(viewName, view, me, botSeat, { open = false, fold } = {}) {
-    if (viewName === 'compared' || viewName === 'detailed') return [cardsPanel(view, me, botSeat, { open, fold, detail: viewName === 'detailed' })];
-    return [deckPanel(view, me, { open }), botPanel(view, botSeat, { open })];
+/**
+ * The player's choices from their preferences: the view ('player' by default) and the detail (on by default, as
+ * the player's hand-and-deck cards always were in 'player'; PR #2, 2026-11-15).
+ */
+export function cardsChoice({ cards, detail }) {
+    const before = cards === 'detailed'; // a view of its own until the detail became a choice for both
+    return { view: before ? 'compared' : CARD_VIEWS.includes(cards) ? cards : 'player', detail: detail ?? true };
 }
 
-/** The player's cards as the app counts them: hand and deck only together, the rest pile by pile. */
-export function deckPanel(view, me, { open = false } = {}) {
+/** The panels for the player's choice of view; `fold` keeps the sections folded in 'compared'. */
+export function cardPanels(viewName, view, me, botSeat, { open = false, fold, detail = false } = {}) {
+    if (viewName === 'compared') return [cardsPanel(view, me, botSeat, { open, fold, detail })];
+    return [deckPanel(view, me, { open, detail }), botPanel(view, botSeat, { open, detail })];
+}
+
+/**
+ * A side's cards in deck, hand and play, as { type: n }: all its cards (the scenario's deck and supply) less its
+ * supply, discard pile and removed cards, which anyone may count, as a player taking notes would; never in which
+ * order. Null for the computer once it has removed cards: the rules keep those from its opponent.
+ */
+export function handDeckPlay(view, seat) {
+    const p = view.players[seat];
+    if (!p.removed && p.removedCount) return null;
+    const { deck, supply } = scenarioById(view.scenario).cards[p.side];
+    const n = {};
+    for (const pile of [deck, supply]) for (const [type, k] of Object.entries(pile)) n[type] = (n[type] ?? 0) + k;
+    for (const pile of [p.supply, p.discard, p.removed ?? []]) for (const [type, k] of typeCounts(pile)) n[type] -= k;
+    return n;
+}
+
+/**
+ * The detail of a side's deck, hand and play: a line per type, with the play letter (cmp.deck.playTag) once per
+ * copy in play, "Rifleman A ×3 (PP)"; for the computer with removed cards, only its play (its deck and hand are
+ * shown as counts beside it).
+ */
+function detailLines(view, seat) {
+    const p = view.players[seat];
+    const inPlay = new Map(typeCounts(p.play));
+    const line = ([type, k]) => `${counted([type, k])}${inPlay.get(type) ? ` (${t('cmp.deck.playTag').repeat(inPlay.get(type))})` : ''}`;
+    const pool = handDeckPlay(view, seat);
+    return typeCounts(pool ?? p.play).map(line);
+}
+
+/** The player's cards as the app counts them: how many in deck and hand, the rest pile by pile. */
+export function deckPanel(view, me, { open = false, detail = false } = {}) {
     const p = view.players[me];
     const row = (label, text) => [h('b', {}, label), h('span', {}, text || '—')];
     return h('details', { class: 'info deck-panel', open: open || null },
         h('summary', {}, `${t('cmp.deck.title', { side: sideName(me) })} · ${t('cmp.deck.counts', { deck: p.deckCount, hand: p.handCount })}`),
         h('div', { class: 'piles' },
-            row(t('cmp.deck.hidden'), cardList(p.hidden)),
             row(t('cmp.deck.discard'), cardList(p.discard)),
-            row(t('cmp.deck.play'), cardList(p.play)),
+            detail ? row(t('cmp.deck.handDeckPlay'), detailLines(view, me).join(', ')) : row(t('cmp.deck.play'), cardList(p.play)),
             row(t('cmp.deck.supply'), cardList(p.supply)),
             row(t('cmp.deck.removed'), cardList(p.removed ?? []))));
 }
 
-/** The computer's cards: what anyone may see (its discard pile and supply), and how many in hand and deck. */
-export function botPanel(view, botSeat, { open = false } = {}) {
+/** The computer's cards: what anyone may see (its play area, discard pile and supply), and how many in hand and deck. */
+export function botPanel(view, botSeat, { open = false, detail = false } = {}) {
     const p = view.players[botSeat];
     const list = (cards) => cardList(cards) || t('cmp.check.none');
     return h('details', { class: 'info bot', open: open || null },
         h('summary', {}, `${sideName(botSeat)} (${t('cmp.bot')}) · ${t('game.handCount', { n: p.handCount })} · ${t('game.deck', { n: p.deckCount })}`),
+        detail ? h('p', { class: 'small' }, h('b', {}, `${t('cmp.deck.handDeckPlay')}: `), detailLines(view, botSeat).join(', ') || t('cmp.check.none'))
+            : h('p', { class: 'small' }, h('b', {}, `${t('game.play')}: `), list(p.play)),
         h('p', { class: 'small' }, h('b', {}, `${t('game.discardPile')}: `), list(p.discard)),
         h('p', { class: 'small' }, h('b', {}, `${t('game.supply')}: `), list(p.supply)));
 }
@@ -112,26 +155,34 @@ const pileCol = (cards, right = false) => {
     return h('div', { class: `cards-col${right ? ' right' : ''}` }, types.length ? types.map((x) => h('div', {}, counted(x))) : '—');
 };
 
+/** A side's detail (detailLines()) as a column. */
+const detailCol = (view, seat, right = false) => {
+    const lines = detailLines(view, seat);
+    return h('div', { class: `cards-col${right ? ' right' : ''}` }, lines.length ? lines.map((x) => h('div', {}, x)) : '—');
+};
+
 /**
  * Both players side by side, pile by pile, so the same pile compares at a glance; each section folds (`fold`:
- * { collapsed, toggle(key) }). The computer's removed cards stay hidden, as in the rulebook. `detail`: under the
- * player's deck and hand counts, the cards they may hold there.
+ * { collapsed, toggle(key) }). The computer's removed cards stay hidden, as in the rulebook. `detail`: how many
+ * cards are in deck, hand and play, and under that which ones, instead of the play area alone.
  */
 function cardsPanel(view, me, botSeat, { open = false, fold = { collapsed: {}, toggle: () => {} }, detail = false } = {}) {
     const [mine, bot] = [view.players[me], view.players[botSeat]];
     const title = (key, lines) => h('div', { class: 'cards-title', onclick: () => fold.toggle(key) },
         lines.map((text, i) => h('div', {}, i ? text : `${fold.collapsed[key] ? '▸' : '▾'} ${text}`)));
+    // how many in deck and hand, and in play too with the detail (the line under them names them all)
+    const counts = (p) => [p.deckCount, p.handCount, ...(detail ? [size(p.play)] : [])].join(' / ');
     const section = (key, label, a, b) => (fold.collapsed[key] ? [title(key, [label])] : [title(key, [label]), pileCol(a), pileCol(b, true)]);
     return h('details', { class: 'info cards-panel', open: open || null },
         h('summary', {}, t('cmp.cards.title')),
         h('div', { class: 'cards-grid' },
             h('div', { class: 'cards-head' }, sideName(me), h('div', {}, `(${t('cmp.you')})`)),
             h('div', { class: 'cards-head right' }, sideName(botSeat), h('div', {}, `(${t('cmp.bot')})`)),
-            title('handDeck', [t('cmp.deck.handDeck'), t('cmp.deck.play')]),
+            title('handDeck', detail ? [t('cmp.deck.handDeckPlay')] : [t('cmp.deck.handDeck'), t('cmp.deck.play')]),
             ...(fold.collapsed.handDeck ? [] : [
-                h('div', { class: 'cards-col' }, `${mine.deckCount} / ${mine.handCount}`, detail ? h('div', { class: 'cards-hidden muted' }, pileCol(mine.hidden)) : null),
-                h('div', { class: 'cards-col right' }, `${bot.deckCount} / ${bot.handCount}`),
-                pileCol(mine.play), pileCol(bot.play, true)]),
+                h('div', { class: 'cards-col' }, counts(mine)),
+                h('div', { class: 'cards-col right' }, counts(bot)),
+                ...(detail ? [detailCol(view, me), detailCol(view, botSeat, true)] : [pileCol(mine.play), pileCol(bot.play, true)])]),
             ...section('discard', t('cmp.deck.discard'), mine.discard, bot.discard),
             ...section('supply', t('cmp.deck.supply'), mine.supply, bot.supply),
             ...section('removed', t('cmp.deck.removed'), mine.removed ?? [], [])));

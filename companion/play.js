@@ -10,7 +10,8 @@ import { h } from '../src/ui/dom.js';
 import { t, tr } from '../src/i18n/index.js';
 import { Session, makeRecord, encodeRecord } from '../src/engine/session.js';
 import { CONTACT, bugMail, appKind } from './contact.js';
-import { withoutRoundLimit } from '../src/engine/state.js';
+import { createState, withoutRoundLimit } from '../src/engine/state.js';
+import { view as viewOf } from '../src/engine/view.js';
 import { TILES, hitChance, scenarioById, unitType } from '../src/engine/data.js';
 import { computerBot } from '../src/ai/computerBot.js';
 import { actionName, cardLabel, cardName, logLine, resultText, sideName, unitName } from '../src/ui/text.js';
@@ -20,7 +21,7 @@ import { BoardZoom } from '../src/ui/zoom.js';
 import { canFullscreen, isFullscreen, toggleFullscreen } from '../src/ui/touch.js';
 import { coverText, drawMap, tileAtPoint } from './map.js';
 import { boardAt, guideSteps } from './guide.js';
-import { CARD_VIEWS, cardPanels } from './cards.js';
+import { CARD_VIEWS, cardPanels, cardsChoice } from './cards.js';
 
 export const SAVE = 'unc-save';
 const SIDES = ['us', 'de'];
@@ -65,7 +66,7 @@ export class CompanionView {
         this.bot = computerBot(this.sc.id, this.botSeat, `${this.session.setup.seed}:bot`);
         this.marks = game.marks ?? []; // answers.length before each of the player's answers (undo)
         this.panelOpen = {}; // the right panel's <details> are rebuilt every render; this keeps their open/closed state
-        this.folded = {}; // the folded sections of the cards panel ('compared' and 'detailed' views), here and in the check
+        this.folded = {}; // the folded sections of the cards panel ('compared' view), here and in the check
         this.steps = [];
         this.sel = null; // the card chosen in a "play" decision, before its action
         this.busy = false;
@@ -82,7 +83,8 @@ export class CompanionView {
         this.onKeydown = (e) => { if (e.key === 'Escape' && !this.modal.hidden) this.hideModal(); };
         document.addEventListener('keydown', this.onKeydown);
         // a new game starts with the steps of its first round (draw your cards); a saved one where it was
-        if (!game.answers?.length) this.steps = this.stepsOf(this.session.state.log, this.view());
+        // (from the table as set up, before any of the log: the cards rebuilt from it would otherwise count it twice)
+        if (!game.answers?.length) this.steps = this.stepsOf(this.session.state.log, viewOf(createState(this.session.setup), this.me));
         this.runBot(0, null);
     }
 
@@ -181,14 +183,20 @@ export class CompanionView {
             : this.session.over ? this.endCard() : req ? this.askCard(req, view) : null;
         const cardsView = this.cardsView();
         const keys = cardsView === 'player' ? ['deck', 'bot'] : ['cards'];
-        const cards = cardPanels(cardsView, view, this.me, this.botSeat, { fold: this.fold(() => this.render()) });
+        // as the map: the cards as of the step being shown, not the engine's, which may be well ahead of it
+        const cards = cardPanels(cardsView, this.shown, this.me, this.botSeat, { fold: this.fold(() => this.render()), detail: this.cardsDetail() });
         this.panel.replaceChildren(main ?? '', ...cards.map((el, i) => this.openPanel(keys[i], el)),
             this.openPanel('log', step ? this.logPanel(view, step.log) : this.logPanel(view)));
     }
 
     /** The player's choice of cards panel (the start screen and ☰): one of CARD_VIEWS, 'player' by default. */
     cardsView() {
-        return CARD_VIEWS.includes(pref('cards')) ? pref('cards') : 'player';
+        return cardsChoice({ cards: pref('cards'), detail: pref('detail') }).view;
+    }
+
+    /** Whether the cards panel shows which cards are in deck, hand and play (☰). */
+    cardsDetail() {
+        return cardsChoice({ cards: pref('cards'), detail: pref('detail') }).detail;
     }
 
     /** The folded sections of the cards panel, and how to fold one and draw it again. */
@@ -240,7 +248,13 @@ export class CompanionView {
             }],
             // the cards panel: each tap moves to the next view (cards.js, CARD_VIEWS)
             [t('cmp.menu.cards', { view: t(`cmp.cards.view.${this.cardsView()}`) }), () => {
+                setPref('detail', this.cardsDetail()); // an old 'detailed' view keeps its detail
                 setPref('cards', CARD_VIEWS[(CARD_VIEWS.indexOf(this.cardsView()) + 1) % CARD_VIEWS.length]);
+                this.render();
+                if (!this.modal.hidden) this.showMenu();
+            }],
+            [t(this.cardsDetail() ? 'cmp.menu.detailOn' : 'cmp.menu.detailOff'), () => {
+                setPref('detail', !this.cardsDetail());
                 this.render();
                 if (!this.modal.hidden) this.showMenu();
             }],
@@ -462,7 +476,7 @@ export class CompanionView {
     }
 
     showCheck() {
-        const view = this.view();
+        const view = this.steps[0]?.board ?? this.view();
         const rows = this.sc.tiles.map((tile) => {
             const { units, marks } = this.tileContents(tile.id, view);
             return h('tr', {}, h('td', {}, h('b', {}, tile.id)), h('td', {}, units), h('td', {}, marks));
@@ -474,7 +488,7 @@ export class CompanionView {
             h('table', {}, h('thead', {}, h('tr', {}, h('th', {}, t('cmp.check.tile')), h('th', {}, t('cmp.check.units')), h('th', {}, t('cmp.check.markers')))), h('tbody', {}, rows)),
             off.length ? h('p', { class: 'small' }, h('b', {}, `${t('cmp.check.offBoard')}: `), off.join(', ')) : null,
             // the player's piles to check against the table (the computer's are in its panel, by player view)
-            cardPanels(this.cardsView(), view, this.me, this.botSeat, { open: true, fold: this.fold(() => this.showCheck()) }).slice(0, 1),
+            cardPanels(this.cardsView(), view, this.me, this.botSeat, { open: true, fold: this.fold(() => this.showCheck()), detail: this.cardsDetail() }).slice(0, 1),
             h('div', { class: 'buttons' }, h('button', { class: 'primary', onclick: () => this.hideModal() }, t('cmp.close')))));
     }
 
