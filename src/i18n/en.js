@@ -76,8 +76,6 @@ export default {
     'act.suppress': 'Suppress',
     'act.blast': 'Blast',
     'spawn.all': 'ALL',
-    'spawn.sniper': 'SNIPER',
-    'spawn.mortar': 'MORTAR',
     'unit.short.R': 'RIF',
     'unit.short.S': 'SCO',
     'unit.short.M': 'MG',

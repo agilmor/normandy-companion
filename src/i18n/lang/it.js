@@ -122,8 +122,6 @@ export default {
         'act.suppress': 'Sopprimere',
         'act.blast': 'Bombardare',
         'spawn.all': 'TUTTI',
-        'spawn.sniper': 'CECCHINO',
-        'spawn.mortar': 'MORTAIO',
         'unit.short.R': 'FUC',
         'unit.short.S': 'SCO',
         'unit.short.M': 'MITR',

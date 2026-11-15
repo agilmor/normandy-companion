@@ -76,8 +76,6 @@ export default {
     'act.suppress': 'Suprimir',
     'act.blast': 'Bombardear',
     'spawn.all': 'TODOS',
-    'spawn.sniper': 'FRANC.',
-    'spawn.mortar': 'MORT.',
     'unit.short.R': 'FUS',
     'unit.short.S': 'EXP',
     'unit.short.M': 'AMET',
