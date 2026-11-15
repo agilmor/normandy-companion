@@ -33,11 +33,27 @@ export function unitOfCard(cid) {
     return t.unit ? `${cid.slice(0, 2)}:${t.unit}` : null;
 }
 
+/**
+ * A tile's cover as printed (a number or 'hill'), or 'hill' for a tile the scenario makes one (`hills` in its JSON:
+ * Castle Itter, 1B of scenario 13).
+ */
+export const tileCover = (tile, hills = []) => (hills.includes(tile) ? 'hill' : TILES[tile].cover);
+
 /** Cover bonus of a tile against an attack: hills give 3, or 1 against a Blast or an attacker on a hill. */
-export function coverOf(tile, { blast = false, fromTile = null } = {}) {
-    const c = TILES[tile].cover;
+export function coverOf(tile, { blast = false, fromTile = null, hills = [] } = {}) {
+    const c = tileCover(tile, hills);
     if (c !== 'hill') return c;
-    return blast || (fromTile && TILES[fromTile].cover === 'hill') ? 1 : 3;
+    return blast || (fromTile && tileCover(fromTile, hills) === 'hill') ? 1 : 3;
+}
+
+/**
+ * The nation a counter or card of `side` shows: the other one for the coalition's squad (`coalition` in the
+ * scenario's JSON: the US seat's squad C are Wehrmacht soldiers in scenario 13). Only its look: the cards and units
+ * of both nations are the same.
+ */
+export function nationOf(sc, side, type) {
+    const c = sc?.coalition;
+    return c && c.side === side && TYPES[type]?.squad === c.squad ? SIDES[1 - SIDES.indexOf(side)] : side;
 }
 
 /** Chance that n d10 roll at least one 0 or one die ≥ total. */

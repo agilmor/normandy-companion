@@ -34,6 +34,7 @@ export default {
     'game.deck': 'Mazo {n}',
     'game.discard': 'Descarte {n}',
     'game.handCount': 'Mano {n}',
+    'game.handNations': 'Mano {n} ({own} de US, {other} alemanas)',
     'game.removed': 'Bajas {n}',
     'game.points': '{n} / {need} puntos',
     'game.pinGoal': 'inmovilizar: {n} fusileros rivales en el tablero',

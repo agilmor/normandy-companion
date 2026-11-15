@@ -4,7 +4,16 @@ import { t, tr } from '../i18n/index.js';
 import { TYPES, UNITS, hitChance, unitKind, unitType } from '../engine/data.js';
 
 const SIDES = ['us', 'de'];
-export const sideName = (seat) => t(`side.${SIDES[seat]}`);
+
+/** A side's name; a scenario may rename one (`sides` in its JSON: the Coalition of scenario 13). */
+export const scenarioSideName = (sc, seat) => (sc?.sides?.[SIDES[seat]] ? tr(sc.sides[SIDES[seat]]) : t(`side.${SIDES[seat]}`));
+
+let scenario = null;
+/** The scenario on screen, whose side names `sideName` gives (the game view and the start screen set it). */
+export const useScenario = (sc) => {
+    scenario = sc;
+};
+export const sideName = (seat) => scenarioSideName(scenario, seat);
 
 /** Card type `RA` → "Fusilero A". */
 export function cardName(type) {
@@ -21,7 +30,7 @@ export function cardLabel(type) {
 export function unitName(uid, viewer) {
     const type = unitType(uid);
     const base = tr(UNITS[unitKind(type)].name) + (type.length === 2 && !['MO', 'SN'].includes(type) ? ` ${type[1]}` : '');
-    return viewer == null || SIDES[viewer] === uid.slice(0, 2) ? base : `${base} (${t(`side.${uid.slice(0, 2)}`)})`;
+    return viewer == null || SIDES[viewer] === uid.slice(0, 2) ? base : `${base} (${sideName(SIDES.indexOf(uid.slice(0, 2)))})`;
 }
 
 export function actionName(a, value, squad) {

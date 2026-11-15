@@ -34,6 +34,7 @@ export default {
     'game.deck': 'Deck {n}',
     'game.discard': 'Discard {n}',
     'game.handCount': 'Hand {n}',
+    'game.handNations': 'Hand {n} ({own} US, {other} German)',
     'game.removed': 'Casualties {n}',
     'game.points': '{n} / {need} points',
     'game.pinGoal': 'pin down: {n} enemy riflemen on the board',

@@ -31,7 +31,7 @@ export function attackTargets(g, seat, uid, action) {
     return onBoard(g, 1 - seat)
         .filter((e) => action.a !== 'suppress' || !e.suppressed)
         .map((e) => {
-            const cover = coverOf(e.tile, { fromTile: from });
+            const cover = coverOf(e.tile, { fromTile: from, hills: sc(g).hills });
             const range = dist(g, from, e.tile);
             return { unit: e.id, tile: e.tile, defence: defenceOf(e.id), cover, range, total: defenceOf(e.id) + cover + range, dice: action.v };
         });
@@ -349,7 +349,7 @@ function* blast(g, seat, uid, action) {
     log(g, 'blast', { seat, unit: uid, tile, count: victims.length });
     for (const v of victims) {
         if (g.units[v].tile !== tile) continue;
-        const total = defenceOf(v) + coverOf(tile, { blast: true });
+        const total = defenceOf(v) + coverOf(tile, { blast: true, hills: sc(g).hills });
         const { dice, hit } = yield* rollFor(g, seat, action.v, total, { unit: uid, target: v, attack: 'blast', defence: defenceOf(v), cover: total - defenceOf(v), range: 0 });
         log(g, 'attack', { seat, unit: uid, target: v, kind: 'blast', dice, total, cover: total - defenceOf(v), range: 0, hit });
         yield* beat(g, 'attack', { unit: uid, target: v, dice, total, hit });

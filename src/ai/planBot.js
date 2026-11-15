@@ -139,12 +139,16 @@ function replay(g0, seat, line) {
 /**
  * Weights of `evaluate`. `holdWin`/`holdFar`: an objective that would win the game for the enemy is worth holding
  * that many times more, against enemy Riflemen up to that far (a Rifleman with Inspire and Guide covers 4 or 5 tiles
- * in two turns; only for a side that wins by pinning, which has nothing else to do with an objective). `enemyFog`:
+ * in two turns; only for a side that wins by pinning, which has nothing else to do with an objective). There, our
+ * nearest other counter adds `holdRoute` of that / (1 + its distance to it): the lone German Machine Gunners on 18A
+ * of scenario 16 fell and no German counter could step in, as Germany had no marker on the way (the user's game,
+ * docs/02 §5.2); now its Scouts explore towards it. Tried without effect: a second counter on it (×0.3), and steps
+ * onto a tile without our marker counting double. `enemyFog`:
  * each Fog of War in the enemy's deck, hand and discard pile (what Conceal gives them; without it Conceal looked like a wasted card).
  * `exposure` does not apply while racing (`racing`): heavier there (30), as losing Riflemen loses the game, it kept US
  * back in scenario 6, where it needs one Control 5 tiles away (docs/02 §5.2).
  */
-export const WEIGHTS = { points: 130, exposure: 12, enemyFog: 8, goalMarker: 20, hold: 70, holdWin: 5, holdFar: 5 };
+export const WEIGHTS = { points: 130, exposure: 12, enemyFog: 8, goalMarker: 20, hold: 70, holdWin: 5, holdFar: 5, holdRoute: 1 };
 
 /** Every card a player still owns, wherever it is. */
 const owned = (p) => [...p.deck, ...p.hand, ...p.discard, ...p.play];
@@ -164,7 +168,8 @@ const racing = (cx) => Boolean(cx.sc.win[cx.them].pin) && cx.goals.some(cx.winsA
 
 /**
  * Holding: with the Normandy rule a counter of ours on an objective we control stops the enemy taking it, so it is
- * worth its value times how close the enemy Riflemen are (one counter is enough; North Africa: no blocking).
+ * worth its value times how close the enemy Riflemen are (one counter is enough; North Africa: no blocking). One whose
+ * Control would win the game for the enemy is also worth a way for another counter to get there, should ours fall.
  */
 function holdValue(g, seat, cx) {
     if (g.setup.controlRule === 'northAfrica') return 0;
@@ -174,11 +179,15 @@ function holdValue(g, seat, cx) {
     const theirs = points(g, 1 - seat);
     let v = 0;
     for (const [t, val] of Object.entries(g.objectives)) {
-        if (!val || g.control[t][cx.me] !== 'controlled' || !cx.mine.some((u) => u.tile === t)) continue;
+        if (!val || g.control[t][cx.me] !== 'controlled') continue;
+        const on = cx.mine.some((u) => u.tile === t);
         const near = Math.min(9, ...rifles.map((f) => cx.d(f.tile, t)));
         const wins = !cx.sc.win[cx.me].points && Boolean(need) && theirs + val >= need; // only when holding off is all we do
-        if (wins && near <= w.holdFar) v += w.hold * val * w.holdWin / (1 + near / 2);
-        else if (near <= 2) v += w.hold * val / (1 + near);
+        if (wins && near <= w.holdFar) {
+            const hold = w.hold * val * w.holdWin / (1 + near / 2);
+            const spare = Math.min(9, ...cx.mine.filter((u) => u.tile !== t).map((u) => cx.d(u.tile, t)));
+            v += (on ? hold : 0) + hold * w.holdRoute / (1 + spare);
+        } else if (on && near <= 2) v += w.hold * val / (1 + near);
     }
     return v;
 }

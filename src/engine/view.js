@@ -1,7 +1,7 @@
 // What one seat may see (docs/01 §9): its own hand and removed cards, deck order hidden, the opponent's hand and
 // deck only as counts, bids hidden until revealed. Bots and the UI only ever get this.
 
-import { typeId } from './data.js';
+import { nationOf, scenarioById, typeId } from './data.js';
 import { hopeless, isExternal } from './state.js';
 
 /** Cards per type: { RA: 2, FOW: 1 }. */
@@ -11,7 +11,17 @@ const countTypes = (cards) => {
     return n;
 };
 
+/**
+ * How many cards of the coalition's other nation it holds in hand (scenario 13: the German ones; their backs show
+ * it, so it is public), or null for a side without one.
+ */
+function handForeign(sc, p) {
+    if (sc.coalition?.side !== p.side) return null;
+    return p.hand.filter((c) => nationOf(sc, p.side, typeId(c)) !== p.side).length;
+}
+
 export function view(g, seat) {
+    const sc = scenarioById(g.scenario);
     const players = g.players.map((p, s) => ({
         side: p.side,
         // an external seat (the companion's player, docs/02 §7.4): the engine does not know its hand, only which
@@ -20,6 +30,7 @@ export function view(g, seat) {
         hidden: isExternal(g, s) ? countTypes([...p.hand, ...p.deck]) : null,
         hand: s === seat && !isExternal(g, s) ? [...p.hand] : null,
         handCount: p.hand.length,
+        handForeign: handForeign(sc, p),
         deckCount: p.deck.length,
         discard: [...p.discard],
         play: [...p.play],

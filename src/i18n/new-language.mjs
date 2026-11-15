@@ -36,8 +36,13 @@ const entry = (k, v) => `        ${/^[A-Za-z_]\w*$/.test(k) ? k : quote(k)}: ${t
 
 /** The source of a new language file, with the English texts in place to be translated. */
 export function starter(code, name) {
-    const m = model();
-    const block = (obj) => Object.entries(obj).map(([k, v]) => entry(k, v)).join('\n');
+    return languageSource({ code, name, credit: `${name} translation: your name`, ...model() });
+}
+
+/** The source of a language file for `l` ({ code, name, credit, cards, units, scenarios, texts }). */
+export function languageSource(l) {
+    const { code, name } = l;
+    const block = (obj) => Object.entries(obj ?? {}).map(([k, v]) => entry(k, v)).join('\n');
     return `// ${name} (${code}): texts of Normandy Companion. Translate the strings and keep the keys, the {placeholders}
 // and the code of the few functions (plurals). Card, unit and scenario names: exactly as printed in the official
 // edition of the game in this language. Check with: node src/i18n/new-language.mjs --check ${code}
@@ -45,25 +50,25 @@ export function starter(code, name) {
 export default {
     code: ${quote(code)},
     name: ${quote(name)},
-    credit: ${quote(`${name} translation: your name`)},
+    credit: ${quote(l.credit)},
 
     // the cards (the squads A, B and C share one name)
     cards: {
-${block(m.cards)}
+${block(l.cards)}
     },
 
     // the counters, as on the map ("Riflemen A")
     units: {
-${block(m.units)}
+${block(l.units)}
     },
 
     // the scenario titles, as in the scenario book
     scenarios: {
-${block(m.scenarios)}
+${block(l.scenarios)}
     },
 
     texts: {
-${block(m.texts)}
+${block(l.texts)}
     },
 };
 `;
@@ -107,7 +112,7 @@ export function checkLanguage(l) {
 }
 
 /** Imports the new file in lang/index.js and adds it to the list there. */
-function register(code) {
+export function register(code) {
     const file = join(HERE, 'lang/index.js');
     const id = code.replace('-', '_');
     const src = readFileSync(file, 'utf8');
