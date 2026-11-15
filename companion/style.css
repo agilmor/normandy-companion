@@ -142,14 +142,9 @@ input, select, textarea { background: #14160f; color: var(--ink); border: 1px so
 .cmap.terrain .ctile.pickable:hover .tart { filter: brightness(1.15); }
 .cmap.terrain .ctile .tid { fill: var(--tile-ink); stroke: #f1ecda; stroke-width: 4; stroke-linejoin: round; paint-order: stroke; }
 .cmark circle { stroke-width: 2.5; }
-.cmark text { font-size: 12px; text-anchor: middle; fill: #fff; font-weight: 700; }
-.cmark.us circle { stroke: var(--us); }
-.cmark.de circle { stroke: var(--de); }
-.cmark.us.controlled circle { fill: var(--us); }
-.cmark.de.controlled circle { fill: var(--de); }
-.cmark.scouted circle { fill: #f6f1df; }
-.cmark.us.scouted text { fill: var(--us); }
-.cmark.de.scouted text { fill: var(--de); }
+.cmark.us circle { stroke: var(--us); fill: var(--us); }
+.cmark.de circle { stroke: var(--de); fill: var(--de); }
+.cmark .cmark-in, .cmark circle.cmark-in { fill: #fff; stroke: none; }
 .cspawn { stroke-width: 1.5; fill: #f6f1df; }
 .cspawn.us { stroke: var(--us); }
 .cspawn.de { stroke: var(--de); }

@@ -46,6 +46,16 @@ function terrainOf(tileId, cover) {
 let clipIds = 0;
 // loaded once at the start, so the first map does not show up empty
 if (typeof Image !== 'undefined') for (const [cls, n] of Object.entries(TERRAIN)) for (let i = 1; i <= n; i++) new Image().src = `assets/terrain/${cls}-${i}.png`;
+/** A five-pointed star centred on (cx, cy), `r` from the centre to a point, the top one up. */
+function starPath(cx, cy, r) {
+    const pts = [];
+    for (let i = 0; i < 10; i++) {
+        const a = -Math.PI / 2 + (i * Math.PI) / 5;
+        const k = i % 2 ? r * 0.42 : r;
+        pts.push(`${(cx + k * Math.cos(a)).toFixed(2)} ${(cy + k * Math.sin(a)).toFixed(2)}`);
+    }
+    return `M${pts.join(' L')} Z`;
+}
 export const coverText = (c) => (c === 'hill' ? '3/1' : String(c));
 
 /** Short label of a counter: "FUS A", "MORT". */
@@ -93,9 +103,10 @@ export function drawMap(view, { picks = new Map(), onPick = () => {}, viewer, fo
         for (const side of SIDES) {
             const c = view.control[tile.id][side];
             if (!c) continue;
+            // the side's colour all round and a white shape drawn here, not a font's ★ or ◉: the same on every device
             g.append(s('g', { class: `cmark ${side} ${c}` },
                 s('circle', { cx: mx, cy: 16, r: 9.5 }),
-                s('text', { x: mx, y: 20 }, c === 'controlled' ? '★' : '◉')));
+                c === 'controlled' ? s('path', { d: starPath(mx, 16, 6.8), class: 'cmark-in' }) : s('circle', { cx: mx, cy: 16, r: 4, class: 'cmark-in' })));
             mx += 22;
         }
         for (const sp of spawnsAt[tile.id] ?? []) {
